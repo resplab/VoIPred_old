@@ -1,5 +1,9 @@
 library(tidyverse)
 library(glmnet)
+
+# 3 hours: April 11, 11am to 2pm
+# 30 min : April 28, 2.30pm to 3pm
+
 #' @export
 draw_graphs <- function(res)
 {
@@ -20,7 +24,8 @@ draw_graphs <- function(res)
 }
 
 case_study_OPTIMAL <-function(covars=c("gender","age","oxygen","sgrq","fev1","nowsmk","LAMA","LABA"),
-                     n_sim=1000, bootstrap=T, lambdas=(1:99)/100, only_severe=F, alpha=1,Nfold=3)
+                     n_sim=1000, bootstrap=T, lambdas=(1:99)/100, only_severe=F, alpha=1,Nfold=3,penalized=T,
+                     min_FUT=0.1)
 {
   data(trials_data)
 
@@ -46,12 +51,12 @@ case_study_OPTIMAL <-function(covars=c("gender","age","oxygen","sgrq","fev1","no
 
   message("N of the development set:", nrow(df_dev))
 
-  short_fu_index <- (df_dev$FUT < 0.5)
+  short_fu_index <- (df_dev$FUT < min_FUT)
 
   message("N removed due to censoring from development set: ",sum(short_fu_index)," (",round(sum(short_fu_index)/nrow(df_dev)*100,1),"%)")
 
   df_dev <- df_dev %>%
-    filter(FUT >= 0.5)
+    filter(FUT >= min_FUT)
 
   message("Final N of the development set:", nrow(df_dev))
 
@@ -91,10 +96,15 @@ case_study_OPTIMAL <-function(covars=c("gender","age","oxygen","sgrq","fev1","no
 
 
   # check
+  if(penalized){
   cv.reg <- cv.glmnet(x=x_dev, y=y_dev, family="poisson",offset=offset_dev,
                       standardize = F,standardize.response = F,alpha=alpha,nfolds = Nfold)
   reg <- glmnet(x=x_dev, y=y_dev, family="poisson",offset=offset_dev,
                 standardize = F,standardize.response = F,alpha=alpha,lambda =  cv.reg$lambda.min)
+  } else{
+    reg <- glmnet(x=x_dev, y=y_dev, family="poisson",offset=offset_dev,
+                  standardize = F,standardize.response = F,alpha=alpha,lambda =  0)
+  }
   pi <- 1 - exp(-as.vector(predict(reg,type="response", newx=x_dev,newoffset = 0)))
 
 
@@ -111,11 +121,17 @@ case_study_OPTIMAL <-function(covars=c("gender","age","oxygen","sgrq","fev1","no
       x_bs <- x_dev[bs_index,]
       y_bs <- y_dev[bs_index]
       offset_bs <- offset_dev[bs_index]
-      cv_bs <- cv.glmnet(x=x_bs, y=y_bs, family="poisson",offset=offset_bs,
-                          standardize = F,standardize.response = F,alpha=alpha,nfold=Nfold)
-      reg_bs <- glmnet(x=x_bs, y=y_bs, family="poisson",offset=offset_bs,
-                    standardize = F,standardize.response = F,alpha=alpha,
-                    lambda =  cv_bs$lambda.min)
+      if(penalized){
+        cv_bs <- cv.glmnet(x=x_bs, y=y_bs, family="poisson",offset=offset_bs,
+                            standardize = F,standardize.response = F,alpha=alpha,nfold=Nfold)
+        reg_bs <- glmnet(x=x_bs, y=y_bs, family="poisson",offset=offset_bs,
+                      standardize = F,standardize.response = F,alpha=alpha,
+                      lambda =  cv_bs$lambda.min)
+      } else{
+        reg_bs <- glmnet(x=x_bs, y=y_bs, family="poisson",offset=offset_bs,
+                         standardize = F,standardize.response = F,alpha=alpha,
+                         lambda =  0)
+      }
       p <- 1 - exp(-(as.vector(predict(reg_bs,type="response", newx=x_dev,newoffset = 0))))
     }
     else
