@@ -4,7 +4,7 @@ library(glmnet)
 # Harry timesheet:
 # 3 hours: April 11, 11am to 2pm
 # 30 min : April 18, 2.30pm to 3pm
-# : April 22, 9.30pm to 10.30pm
+# 1 hr: April 22, 9.30pm to 10.30pm
 
 #' @export
 draw_graphs <- function(res)
