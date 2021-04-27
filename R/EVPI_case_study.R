@@ -19,6 +19,8 @@ draw_graphs <- function(res)
 
 }
 
+
+
 case_study_OPTIMAL <-function(covars=c("gender","age","oxygen","sgrq","fev1","nowsmk","LAMA","LABA"),
                      n_sim=1000, bootstrap=T, lambdas=(1:99)/100, only_severe=F, alpha=1,Nfold=3)
 {
@@ -51,7 +53,7 @@ case_study_OPTIMAL <-function(covars=c("gender","age","oxygen","sgrq","fev1","no
   message("N removed due to censoring from development set: ",sum(short_fu_index)," (",round(sum(short_fu_index)/nrow(df_dev)*100,1),"%)")
 
   df_dev <- df_dev %>%
-    filter(FUT >= 0.5)
+    filter(FUT >= 0.1)
 
   message("Final N of the development set:", nrow(df_dev))
 

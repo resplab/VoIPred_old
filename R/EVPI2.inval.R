@@ -29,7 +29,7 @@ generate_data <- function(n, betas)
 
 
 #' @export
-stylized_sim <- function(betas=c(-2,0,1), sample_size=100, n_sim=10000, lambdas=rep(1:19)/20, bootstrap=F, reuse_data=F)
+stylized_sim <- function(betas=c(-3,0,1), sample_size=100, n_sim=10000, lambdas=rep(1:19)/20, reuse_data=F)
 {
   formula=paste("Y~",paste0("X",1:(length(betas)-1),collapse = "+"))
 
@@ -37,46 +37,11 @@ stylized_sim <- function(betas=c(-2,0,1), sample_size=100, n_sim=10000, lambdas=
 
   reg <- glm(formula=formula, data=sample_data, family=binomial(link="logit"))
 
-  mu <- coefficients(reg)
-  sigma <- vcov(reg)
+  res_p <- EVPP.glm(reg, n_sim, bootstrap = F)
+  res_np <- EVPP.glm(reg, n_sim, bootstrap = T)
 
-  pi <- predict(reg, type="response")
-  sample_data[,'pi'] <- pi
-
-  NB_test <- rep(0, length(lambdas))
-  NB_all <- NB_test
-  NB_max <- NB_test
-
-  for(i in 1:n_sim)
-  {
-    if(bootstrap)
-    {
-      bs_data<-sample_data[ sample((1:sample_size),sample_size,replace = T),]
-      bs_reg <- glm(data=bs_data, formula=Y~X1+X2, family = binomial(link="logit"))
-      p <- as.vector(predict(bs_reg, newdata=sample_data, type="response"))
-    }
-    else
-    {
-      new_betas <- rmvnorm(1, mean=mu, sigma=sigma)
-      p <- as.vector(1/(1+exp(-(new_betas %*% t(cbind(1,sample_data[,c('X1','X2')]))))))
-    }
-
-    if(i==1) plot(pi,p)
-
-    for(j in 1:length(lambdas))
-    {
-      NB_test[j] <- NB_test[j] + mean((p - (1 - p) * lambdas[j] / (1 - lambdas[j])) * (pi > lambdas[j]))
-
-      NB_all[j] <- NB_all[j] + mean((p - (1 - p) * lambdas[j] / (1 - lambdas[j])) * 1)
-
-      NB_max[j] <- NB_max[j] + mean((p - (1 - p) * lambdas[j] / (1 - lambdas[j])) * (p > lambdas[j]))
-    }
-    #cat('.')
-  }
-
-  res <<- cbind(lambda=lambdas, NB_all=NB_all/n_sim, NB_test=NB_test/n_sim, NB_max=NB_max/n_sim)
-
-  draw_graphs(res)
+  draw_graphs(res_p)
+  draw_graphs(res_np)
 
   return(res)
 }
@@ -188,28 +153,26 @@ case_study<-function(covars=c("gender","age10","oxygen","sgrq10","fev1","nowsmk"
 #' @export
 EVPP.glm<-function(reg_obj, n_sim=1000, bootstrap=F, lambdas=(1:99)/100)
 {
-  sample_size <- dim(reg$data)[1]
-  mu <- coefficients(reg)
-  sigma <- vcov(reg)
+  sample_size <- dim(reg_obj$data)[1]
+  mu <- coefficients(reg_obj)
+  sigma <- vcov(reg_obj)
 
-  pi<-predict(reg,type="response")
+  pi<-predict(reg_obj,type="response")
 
-  NB_test <- rep(0, length(lambdas))
-  NB_all <- NB_test
-  NB_max <- NB_test
+  NB_test <-  NB_all <-  NB_max  <- rep(0, length(lambdas))
 
   for(i in 1:n_sim)
   {
     if(bootstrap)
     {
-      bs_data<-reg$data[sample((1:sample_size),sample_size,replace = T),]
-      bs_reg <- glm(data=bs_data,formula = reg$call$formula, family=reg$call$family)
-      p <- as.vector(predict(bs_reg, newdata=reg$data, type="response"))
+      bs_data<-reg_obj$data[sample((1:sample_size),sample_size,replace = T),]
+      bs_reg <- glm(data=bs_data,formula = reg_obj$formula, family=reg_obj$family)
+      p <- as.vector(predict(bs_reg, newdata=reg_obj$data, type="response"))
     }
     else
     {
       new_betas <- rmvnorm(1, mean=mu, sigma=sigma)
-      p <- as.vector(1/(1+exp(-(new_betas %*% t(model.matrix(reg))))))
+      p <- as.vector(1/(1+exp(-(new_betas %*% t(model.matrix(reg_obj))))))
     }
 
     if(i==1) plot(pi,p)
