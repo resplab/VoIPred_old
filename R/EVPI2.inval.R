@@ -84,13 +84,19 @@ evpp.glmnet <- function(reg_obj, x, y, n_sim=1000, lambdas=(1:99)/100, Bayesian_
   NB_all <- NB_model
   NB_max <- NB_model
 
-  NBe_model <- NB_model
-  NBe_all <- NB_model
+  dc_model <- NB_model
+  dc_all <- NB_model
 
   optimism <- NB_model
 
   aux$bs_coeffs <- matrix(NA,nrow=n_sim, ncol=dim(coefficients(reg_obj)))
   colnames(aux$bs_coeffs) <- rownames(coefficients(reg_obj))
+
+  for(j in 1:length(lambdas))
+  {
+    dc_model[j] <- dc_model[j] + mean((y - (1 - y) * lambdas[j] / (1 - lambdas[j])) * (pi > lambdas[j]))
+    dc_all[j] <- dc_all[j] + mean((y - (1 - y) * lambdas[j] / (1 - lambdas[j])) * 1)
+  }
 
   for(i in 1:n_sim)
   {
@@ -117,9 +123,16 @@ evpp.glmnet <- function(reg_obj, x, y, n_sim=1000, lambdas=(1:99)/100, Bayesian_
     }
   }
 
-  EVPP <- (NB_max-pmax(0,NB_model,NB_all))/n_sim
+  NB_model <- NB_model / n_sim
+  NB_all <- NB_all / n_sim
+  NB_max <- NB_max / n_sim
+  optimism <- optimism / n_sim
 
-  res <-cbind(lambda=lambdas, EVPP=EVPP, NB_all=NB_all/n_sim, NB_model=NB_model/n_sim, NB_max=NB_max/n_sim, optimism=optimism/n_sim)
+  EVPP <- (NB_max-pmax(0,NB_model,NB_all))
+
+  EVPPe <- (NB_max-pmax(0,dc_model-optimism,dc_all))
+
+  res <-cbind(lambda=lambdas, EVPP=EVPP, EVPPe=EVPPe, NB_all=NB_all, NB_model=NB_model, NB_max=NB_max, dc_model=dc_model, dc_all=dc_all, optimism=optimism)
 
   return(res)
 }

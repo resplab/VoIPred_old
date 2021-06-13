@@ -1,3 +1,7 @@
+library(glmnet)
+
+set.seed(2222)
+
 settings <- list()
 settings$master_formula <- day30 ~ sex + age + dia + miloc + pmi + htn +  smk + tx
 
@@ -24,14 +28,16 @@ case_study_gusto <- function(n_sim=1000, subsample=1000)
   res0 <<- evpp.glmnet(reg, x, y, n_sim = n_sim, Bayesian_bootstrap = F)
   res1 <<- evpp.glmnet(reg, x, y, n_sim = n_sim, Bayesian_bootstrap = T)
 
-  dc_data <- decision_curve(y, VoIPred:::aux$pi)
-  dc_data[,'NB_model'] <- dc_data[,'NB_model']-res0[,'optimism']
-  plot_decision_curve(dc_data)
-
-  browser()
-  plot(dc_data[,'lambda'],dc_data[,'NB_model'],type='l')
-  lines(res0[,'lambda'],res0[,'NB_model'],type='l',col="red")
+  #tmp <- decision_curve(VoIPred:::aux$y, VoIPred:::aux$pi)
+  plot(res0[,'lambda'],res0[,'dc_model']-res0[,'optimism'],type='l', xlab="Threshold", ylab="Net benefit")
+  lines(res0[,'lambda'],res0[,'dc_model'],type='l',col="gray")
+  lines(res0[,'lambda'],res0[,'NB_model'],type='l',col="green")
   lines(res1[,'lambda'],res1[,'NB_model'],type='l',col="blue")
+  #lines(tmp[,'lambda'],tmp[,'NB_model'],col="red")
+
+  #lines(res0[,'lambda'],res0[,'NB_max'],type='l',col="red")
+  #lines(res1[,'lambda'],res1[,'NB_max'],type='l',col="orange")
+
 
   table_1 <- data.frame(
     cbind(
@@ -45,6 +51,7 @@ case_study_gusto <- function(n_sim=1000, subsample=1000)
       )
     )
   )
+
   #rownames(table_1) <- colnames(VoIPred:::aux$coeffs)
   write.table(table_1,"clipboard",row.names = T)
 
