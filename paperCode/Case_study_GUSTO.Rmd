@@ -1,0 +1,110 @@
+---
+title: "Case_study_GUSTO"
+output: html_document
+---
+
+```{r setup, include=FALSE, echo=FALSE}
+load_file="2021.06.13.RDS"
+
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE)
+
+load_results <- FALSE  #If true, will not run the simulation, rather will load the results
+save_results <- TRUE
+```
+
+```{r echo=FALSE, message=FALSE}
+source("case_study_GUSTO.R")
+print("R code succesfully sourced.\n")
+```
+
+The model is 
+```{r echo=FALSE} 
+settings$master_formula 
+```
+
+
+```{r main, echo=FALSE, message=FALSE, dev='png', fig.show='hide', results=FALSE}
+case_study_gusto(load_file=load_file)
+```
+
+```{r echo=FALSE}
+print(sprintf("Number of simulaitons:%d",settings$n_sim))
+```
+
+## Regressoin table (Table 1)
+```{r echo=FALSE, message=FALSE}
+knitr::kable(results$table_1)
+```
+
+
+
+## Figures for the case study
+## Decision curve
+```{r echo=FALSE}
+  print("Optimism-corrected (red) NB of the candidate model and its Bayesian estimators (orange: ordinary bootstrap, blue: Bayesian bootstrap), compared with the NB of treating all (black) and treating none (gray)")
+
+  plot(results$res0[,'lambda'],results$res0[,'dc_model']-results$res0[,'optimism'],type='l',   xlab="Threshold", ylab="Net benefit", col="red", lwd=2)
+  lines(results$res0[,'lambda'],results$res0[,'dc_all'],type='l',col="black")
+  lines(results$res0[,'lambda'],results$res0[,'dc_all']*0,type='l',col="gray")
+  lines(results$res0[,'lambda'],results$res0[,'NB_model'],type='l',col="orange" ,lwd=2)
+  lines(results$res1[,'lambda'],results$res1[,'NB_model'],type='l',col="blue", lwd=2)
+  #lines(tmp[,'lambda'],tmp[,'NB_model'],col="red")
+```
+
+### Ordinary bootstrap
+```{r echo=FALSE, message=FALSE, results=FALSE}
+process_results(results$res0,graphs=c('summit','evcp'))
+```
+
+### Bayesian bootstrap
+```{r echo=FALSE, message=FALSE, results=FALSE}
+process_results(results$res1,graphs=c('summit','evcp'))
+```
+
+
+##Numerical values of the case study
+```{r echo=FALSE, message=FALSE}
+print(sprintf("Optimism-corrected AUC:%.4f", results$auc[1]-results$auc[2]))
+
+print(sprintf("Default threshold is: %f",settings$default_th))
+  
+produce <- function(res)
+{
+  x <- which(res[,'lambda']==settings$default_th)
+
+  print(sprintf("Expected NB at default threshold without any model:%.4f",max(0,res[x,'NB_all'])))
+  print(sprintf("INB of the proposed model at default threshold:%.4f",res[x,'NB_model']))
+  print(sprintf("INB of the correct model at default threshold:%.4f",res[x,'NB_max']))
+  print(sprintf("EVCP at default threshold:%.4f",res[x,'EVCP']))
+  evcp_r <- (res[x,'NB_max']-max(0,res[x,'NB_all']))/(res[x,'NB_model']-max(0,res[x,'NB_all']))
+  print(sprintf("Relative EVCP at default threshold:%.4f", evcp_r))
+  
+  area_under_inb_current <- mean(res[,'NB_model']-pmax(0,res[,'NB_all']))
+  area_under_inb_perfect <- mean(res[,'NB_max']-pmax(0,res[,'NB_all']))
+  print(sprintf("Area under INB curve with current information:%.4f", area_under_inb_current))
+  print(sprintf("Area under INB curve with perfect information:%.4f", area_under_inb_perfect))
+  global_evcp_r <- area_under_inb_perfect/area_under_inb_current
+  print(sprintf("Global relative EVCP:%.4f", global_evcp_r))
+}
+
+print("Ordinary bootstrap:")
+produce(results$res0)
+print("Bayesian bootstrap:")
+produce(results$res1)
+```
+
+
+### EVCP by sample size
+```{r echo=FALSE}
+print("EVCP at index threshold")
+plot(results$evcp_by_sample_size[,1:2],type='l', log='x', xlab="Sample size", ylab="EVCP", col='red', lwd=2)
+
+print("EVCP_r at index threshold")
+plot(results$evcp_by_sample_size[,c(1,3)],type='l', log='x', xlab="Sample size", ylab="Relative EVCP", col='red', lwd=2)
+```
+
+### EVCP with full data
+```{r echo=FALSE}
+print(sprintf("EVCP at index threshold is: %.4f",results$evcp_by_sample_size[dim(results$evcp_by_sample_size)[1],2]))
+print(sprintf("EVCP_r at index threshold is: %.4f",results$evcp_by_sample_size[dim(results$evcp_by_sample_size)[1],3]))

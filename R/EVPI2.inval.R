@@ -14,7 +14,7 @@ get_aux<-function()
 
 # bootstrap: 0=no (parametric); 1=ordinary; 2=Bayesian
 #' @export
-evpp.glm<-function(reg_obj, n_sim=1000, bootstrap=0, lambdas=(1:99)/100)
+evcp.glm<-function(reg_obj, n_sim=1000, bootstrap=0, lambdas=(1:99)/100)
 {
   sample_size <- dim(reg_obj$data)[1]
   mu <- coefficients(reg_obj)
@@ -53,9 +53,9 @@ evpp.glm<-function(reg_obj, n_sim=1000, bootstrap=0, lambdas=(1:99)/100)
     #cat('.')
   }
 
-  EVPP <- (NB_max-pmax(0,NB_test,NB_all))/n_sim
+  EVCP <- (NB_max-pmax(0,NB_test,NB_all))/n_sim
 
-  res <-cbind(lambda=lambdas, EVPP=EVPP, NB_all=NB_all/n_sim, NB_test=NB_test/n_sim, NB_max=NB_max/n_sim)
+  res <-cbind(lambda=lambdas, EVCP=EVCP, NB_all=NB_all/n_sim, NB_test=NB_test/n_sim, NB_max=NB_max/n_sim)
 
   return(res)
 }
@@ -68,7 +68,7 @@ evpp.glm<-function(reg_obj, n_sim=1000, bootstrap=0, lambdas=(1:99)/100)
 #' @param reg_obj: any object that you can aplpy predict with new data to get predictions
 #' @param x: The model matrix of predictors
 #' @param y: The vector of responses
-evpp.glmnet <- function(reg_obj, x, y, n_sim=1000, lambdas=(1:99)/100, Bayesian_bootstrap=F, empirical=F)
+evcp.glmnet <- function(reg_obj, x, y, n_sim=1000, lambdas=(1:99)/100, Bayesian_bootstrap=F, empirical=F)
 {
   aux$coeffs <- t(as.matrix(coefficients(reg_obj)))
   aux$x <- x
@@ -128,11 +128,9 @@ evpp.glmnet <- function(reg_obj, x, y, n_sim=1000, lambdas=(1:99)/100, Bayesian_
   NB_max <- NB_max / n_sim
   optimism <- optimism / n_sim
 
-  EVPP <- (NB_max-pmax(0,NB_model,NB_all))
+  EVCP <- (NB_max-pmax(0,NB_model,NB_all))
 
-  EVPPe <- (NB_max-pmax(0,dc_model-optimism,dc_all))
-
-  res <-cbind(lambda=lambdas, EVPP=EVPP, EVPPe=EVPPe, NB_all=NB_all, NB_model=NB_model, NB_max=NB_max, dc_model=dc_model, dc_all=dc_all, optimism=optimism)
+  res <-cbind(lambda=lambdas, EVCP=EVCP, NB_all=NB_all, NB_model=NB_model, NB_max=NB_max, dc_model=dc_model, dc_all=dc_all, optimism=optimism)
 
   return(res)
 }
@@ -170,15 +168,14 @@ bootstrap <- function (n, Bayesian=F)
 
 
 #' @export
-process_results <- function(res, graphs=c("evpp","summit","dc"))
+process_results <- function(res, graphs=c("evcp","summit","dc"))
 {
   out <- list()
-  out$einb_current <- mean(pmax(0,res[,'NB_model'],res[,'NB_all'])-pmax(0,res[,'NB_all']))
-  out$einb_perfect <- mean(res[,'NB_max']-pmax(0,res[,'NB_all']))
-  out$uncertainty_index <- out$einb_perfect/out$einb_current
-  out$eevpp <- out$einb_perfect-out$einb_current
+  out$inb_current <- mean(pmax(0,res[,'NB_model'],res[,'NB_all'])-pmax(0,res[,'NB_all']))
+  out$inb_perfect <- mean(res[,'NB_max']-pmax(0,res[,'NB_all']))
+  out$evcp_r <- out$inb_perfect/out$inb_current
 
-  if(!is.na(match("evpp",graphs)))
+  if(!is.na(match("evcp",graphs)))
   {
     plot(res[,'lambda'], res[,'NB_max']-pmax(0,res[,'NB_model'],res[,'NB_all']),type='l', lwd=2, col="red", xlab="Threshold", ylab="EVCP")
   }
