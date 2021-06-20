@@ -4,7 +4,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE, echo=FALSE}
-load_file="2021.06.13.RDS"
+load_file="C:/Users/msafavi/Static/RPackages/VoIPred/TMP.RDS"
 
 library(knitr)
 knitr::opts_chunk$set(echo = TRUE)
@@ -54,14 +54,13 @@ knitr::kable(results$table_1)
 
 ### Ordinary bootstrap
 ```{r echo=FALSE, message=FALSE, results=FALSE}
-process_results(results$res0,graphs=c('summit','evcp'))
+process_results(results$res0,graphs=c('summit','voi'))
 ```
 
 ### Bayesian bootstrap
 ```{r echo=FALSE, message=FALSE, results=FALSE}
-process_results(results$res1,graphs=c('summit','evcp'))
+process_results(results$res1,graphs=c('summit','voi'))
 ```
-
 
 ##Numerical values of the case study
 ```{r echo=FALSE, message=FALSE}
@@ -76,16 +75,16 @@ produce <- function(res)
   print(sprintf("Expected NB at default threshold without any model:%.4f",max(0,res[x,'NB_all'])))
   print(sprintf("INB of the proposed model at default threshold:%.4f",res[x,'NB_model']))
   print(sprintf("INB of the correct model at default threshold:%.4f",res[x,'NB_max']))
-  print(sprintf("EVCP at default threshold:%.4f",res[x,'EVCP']))
-  evcp_r <- (res[x,'NB_max']-max(0,res[x,'NB_all']))/(res[x,'NB_model']-max(0,res[x,'NB_all']))
-  print(sprintf("Relative EVCP at default threshold:%.4f", evcp_r))
+  print(sprintf("voi at default threshold:%.4f",res[x,'voi']))
+  voi_r <- (res[x,'NB_max']-max(0,res[x,'NB_all']))/(res[x,'NB_model']-max(0,res[x,'NB_all']))
+  print(sprintf("Relative voi at default threshold:%.4f", voi_r))
   
   area_under_inb_current <- mean(res[,'NB_model']-pmax(0,res[,'NB_all']))
   area_under_inb_perfect <- mean(res[,'NB_max']-pmax(0,res[,'NB_all']))
   print(sprintf("Area under INB curve with current information:%.4f", area_under_inb_current))
   print(sprintf("Area under INB curve with perfect information:%.4f", area_under_inb_perfect))
-  global_evcp_r <- area_under_inb_perfect/area_under_inb_current
-  print(sprintf("Global relative EVCP:%.4f", global_evcp_r))
+  global_voi_r <- area_under_inb_perfect/area_under_inb_current
+  print(sprintf("Global relative voi:%.4f", global_voi_r))
 }
 
 print("Ordinary bootstrap:")
@@ -95,16 +94,19 @@ produce(results$res1)
 ```
 
 
-### EVCP by sample size
+### voi by sample size
 ```{r echo=FALSE}
-print("EVCP at index threshold")
-plot(results$evcp_by_sample_size[,1:2],type='l', log='x', xlab="Sample size", ylab="EVCP", col='red', lwd=2)
-
-print("EVCP_r at index threshold")
-plot(results$evcp_by_sample_size[,c(1,3)],type='l', log='x', xlab="Sample size", ylab="Relative EVCP", col='red', lwd=2)
+if(!is.null(results$voi_by_sample_size))
+{
+  print("voi at index threshold")
+  plot(results$voi_by_sample_size[,1:2],type='l', log='x', xlab="Sample size", ylab="EVPI", col='red', lwd=2)
+  
+  print("voi_r at index threshold")
+  plot(results$voi_by_sample_size[,c(1,3)],type='l', log='x', xlab="Sample size", ylab="Relative EVPI", col='red', lwd=2)
+}
 ```
 
-### EVCP with full data
+### voi with full data
 ```{r echo=FALSE}
-print(sprintf("EVCP at index threshold is: %.4f",results$evcp_by_sample_size[dim(results$evcp_by_sample_size)[1],2]))
-print(sprintf("EVCP_r at index threshold is: %.4f",results$evcp_by_sample_size[dim(results$evcp_by_sample_size)[1],3]))
+print(sprintf("voi at index threshold is: %.4f",results$voi_by_sample_size[dim(results$voi_by_sample_size)[1],2]))
+print(sprintf("voi_r at index threshold is: %.4f",results$voi_by_sample_size[dim(results$voi_by_sample_size)[1],3]))
