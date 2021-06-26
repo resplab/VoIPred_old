@@ -25,8 +25,7 @@ case_study_gusto <- function(load_file=NULL, save_file=NULL)
     if(!is.null(settings$subsample))
     {
       sample <- gusto[sample(1:dim(gusto)[1],settings$subsample,F),]
-    }
-    else
+    }  else
     {
       sample <- gusto
     }

@@ -4,7 +4,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE, echo=FALSE}
-load_file="C:/Users/msafavi/Static/RPackages/VoIPred/TMP.RDS"
+load_file=paste0(getwd(),"/Results.RDS")
 
 library(knitr)
 knitr::opts_chunk$set(echo = TRUE)
