@@ -1,10 +1,11 @@
 library(glmnet)
 library(VoIPred)
+library(rms)
 
 settings <- list()
-settings$master_formula <- day30 ~ sex + age + dia + miloc + pmi + htn + smk + kill + tx
-settings$default_th <- 0.1
-settings$n_sim <- 1000 #if 0 wont do this part
+settings$master_formula <- day30 ~ age + miloc + pmi + kill + pmin(sysbp,100) + lsp(pulse,50) + htn + dia
+settings$default_th <- 0.02
+settings$n_sim <- 100 #if 0 wont do this part
 settings$subsample <- 1000
 settings$auc_n_sim <- 0   #If set to 0, it will not calculate AUC with optimism correction with the same n_sim.
 settings$sample_size_n_sim_outer <- 0 #if set to 0 will not do
@@ -13,10 +14,12 @@ settings$sample_sizes <- c(250, 500, 1000, 2000, 4000, 8000, 16000, 32000, Inf)
 
 case_study_gusto <- function(load_file=NULL, save_file=NULL)
 {
+  #assign("last.warning", NULL, envir = baseenv())
   set.seed(1234)
   results <<- list()
 
   data("gusto")
+  #gusto <<- gusto[which(gusto$tx=="SK"),]
   gusto$kill <<- (as.numeric(gusto$Killip)>1)*1
 
   if(is.null(load_file))
@@ -52,7 +55,7 @@ case_study_gusto <- function(load_file=NULL, save_file=NULL)
       results$coeffs <<- VoIPred:::aux$coeffs
       results$bs_coeffs <<- VoIPred:::aux$bs_coeffs
 
-      results$res1 <<- voi.glmnet(reg, x, y, n_sim = settings$n_sim, Bayesian_bootstrap = T)
+      results$res1 <<- results$res0 #voi.glmnet(reg, x, y, n_sim = settings$n_sim, Bayesian_bootstrap = T)
     }
 
     if(settings$sample_size_n_sim_outer>0)

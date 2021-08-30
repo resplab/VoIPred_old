@@ -1,5 +1,6 @@
 #' @import mvtnorm
 #' @import glmnet
+#' @import progress
 
 aux <- new.env()
 
@@ -98,12 +99,22 @@ voi.glmnet <- function(reg_obj, x, y, n_sim=1000, lambdas=(1:99)/100, Bayesian_b
     dc_all[j] <- dc_all[j] + mean((y - (1 - y) * lambdas[j] / (1 - lambdas[j])) * 1)
   }
 
+  pb <- progress::progress_bar$new(total=n_sim)
+
   for(i in 1:n_sim)
   {
-    cat(".")
-    weights <- bootstrap(sample_size, Bayesian = Bayesian_bootstrap)
-    tmp <- cv.glmnet(x=x, y=y, family="binomial",weights = as.vector(weights))
-    bs_reg <- glmnet(x=x, y=y, family="binomial", lambda=tmp$lambda.min, weights=as.vector(weights))
+    pb$tick()
+    repeat
+    {
+      weights <- bootstrap(sample_size, Bayesian = Bayesian_bootstrap)
+      issues <- F
+      tryCatch(
+      {
+        tmp <- cv.glmnet(x=x, y=y, family="binomial",weights = as.vector(weights))
+        bs_reg <- glmnet(x=x, y=y, family="binomial", lambda=tmp$lambda.min, weights=as.vector(weights))
+      },warning=function(cond) {message("Warning occured! repeating with a new sample"); issues<- T; })
+      if(!issues) break
+    }
 
     aux$bs_coeffs[i,] <- t(as.matrix(coefficients(bs_reg)))
 
