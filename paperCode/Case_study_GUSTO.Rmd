@@ -96,11 +96,11 @@ produce(results$res1)
 
 ### voi by sample size
 ```{r echo=FALSE}
-data("gusto")
-gusto$kill <- (as.numeric(gusto$Killip)>1)*1
-results <- c()
-set.seed(1234)
-results$voi_by_sample_size <- voi_by_sample_size(1,settings$sample_sizes)
+# data("gusto")
+# gusto$kill <- (as.numeric(gusto$Killip)>1)*1
+# results <- c()
+# set.seed(1234)
+# results$voi_by_sample_size <- voi_by_sample_size(1,settings$sample_sizes)
 
 if(!is.null(results$voi_by_sample_size))
 {
