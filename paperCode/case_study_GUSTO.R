@@ -5,11 +5,12 @@ library(rms)
 settings <- list()
 settings$master_formula <- day30 ~ age + miloc + pmi + kill + pmin(sysbp,100) + lsp(pulse,50) + htn + dia
 settings$default_th <- 0.02
+settings$custom_th <- c(0.01,0.02,0.05,0.1)
 settings$n_sim <- 100 #if 0 wont do this part
 settings$subsample <- 1000
 settings$auc_n_sim <- 0   #If set to 0, it will not calculate AUC with optimism correction with the same n_sim.
 settings$sample_size_n_sim_outer <- 0 #if set to 0 will not do
-settings$sample_size_n_sim_inner <- 100 #Voi calculations for each point witin each iteration
+settings$sample_size_n_sim_inner <- 100 #Voi calculations for each point within each iteration
 settings$sample_sizes <- c(250, 500, 1000, 2000, 4000, 8000, 16000, 32000, Inf)
 
 case_study_gusto <- function(load_file=NULL, save_file=NULL)
@@ -167,8 +168,8 @@ voi_by_sample_size <- function(n_sim, sample_sizes)
   for(i in 1:length(sample_sizes))
   {
     cat("\nsample size:",sample_sizes[i],"\n")
-    voi_th <- 0
-    voi_r <- 0
+
+    voi_th <- voi_r <- rep(0,length(settings$custom_th))
 
     for(j in 1:n_sim)
     {
@@ -176,9 +177,9 @@ voi_by_sample_size <- function(n_sim, sample_sizes)
 
       if(is.infinite(sample_sizes[i])) sample_sizes[i] <- dim(gusto)[1]
 
-      index <- which(res[,'lambda']==settings$default_th)
+      index <- which(res[,'lambda'] %in% settings$custom_th)
       voi_th <- voi_th + res[index,'voi']/n_sim
-      voi_r <- voi_r + process_results(res,graphs="")$voi_r/n_sim
+      voi_r <- voi_r + process_results(res,graphs="",th=settings$custom_th)$voi_r/n_sim
     }
 
     out <- rbind(out,c(sample_sizes[i], voi_th=voi_th, voi_r=voi_r))

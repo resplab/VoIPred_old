@@ -66,7 +66,7 @@ voi.glm<-function(reg_obj, n_sim=1000, bootstrap=0, lambdas=(1:99)/100)
 
 
 #' @export
-#' @param reg_obj: any object that you can aplpy predict with new data to get predictions
+#' @param reg_obj: any object that you can apply predict with new data to get predictions
 #' @param x: The model matrix of predictors
 #' @param y: The vector of responses
 voi.glmnet <- function(reg_obj, x, y, n_sim=1000, lambdas=(1:99)/100, Bayesian_bootstrap=F, empirical=F)
@@ -179,12 +179,20 @@ bootstrap <- function (n, Bayesian=F)
 
 
 #' @export
-process_results <- function(res, graphs=c("voi","summit","dc"))
+process_results <- function(res, graphs=c("voi","summit","dc"),th=NULL)
 {
+  if(is.null(th)){
   out <- list()
   out$inb_current <- mean(pmax(0,res[,'NB_model'],res[,'NB_all'])-pmax(0,res[,'NB_all']))
   out$inb_perfect <- mean(res[,'NB_max']-pmax(0,res[,'NB_all']))
   out$voi_r <- out$inb_perfect/out$inb_current
+  } else{
+    index <- which(res[,'lambda'] %in% th)
+    out <- list()
+    out$inb_current <- pmax(0,res[index,'NB_model'],res[index,'NB_all'])-pmax(0,res[index,'NB_all'])
+    out$inb_perfect <- mean(res[index,'NB_max']-pmax(0,res[index,'NB_all']))
+    out$voi_r <- out$inb_perfect/out$inb_current
+  }
 
   if(!is.na(match("voi",graphs)))
   {
@@ -207,6 +215,7 @@ process_results <- function(res, graphs=c("voi","summit","dc"))
   }
 
   return(out)
+
 }
 
 
