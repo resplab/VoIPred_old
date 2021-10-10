@@ -4,7 +4,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE, echo=FALSE}
-load_file=paste0(getwd(),"/../tmp.RDS")
+load_file=paste0(getwd(),"/../2021.10.07.RDS")
 
 library(knitr)
 knitr::opts_chunk$set(echo = TRUE)
