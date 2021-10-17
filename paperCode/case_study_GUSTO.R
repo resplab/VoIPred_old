@@ -1,23 +1,26 @@
 library(glmnet)
 library(VoIPred)
 library(rms)
+library(GRcomp)
+
+GRconnect("voipred")
+machine_id <- round(runif(1)*10^10)
 
 settings <- list()
 settings$master_formula <- day30 ~ age + miloc + pmi + kill + pmin(sysbp,100) + lsp(pulse,50) + htn + dia
 settings$default_th <- 0.02
-settings$n_sim <- 100 #if 0 wont do this part
 settings$custom_th <- c(0.01,0.02,0.05,0.1)
-settings$n_sim <- 100 #if 0 wont do this part
+settings$n_sim <- 0 #if 0 wont do this part
 settings$subsample <- 1000
 settings$auc_n_sim <- 0   #If set to 0, it will not calculate AUC with optimism correction with the same n_sim.
-settings$sample_size_n_sim_outer <- 0 #if set to 0 will not do
-settings$sample_size_n_sim_inner <- 100 #Voi calculations for each point within each iteration
-settings$sample_sizes <- c(250, 500, 1000, 2000, 4000, 8000, 16000, 32000, Inf)
+settings$sample_size_n_sim_outer <- 1 #if set to 0 will not do
+settings$sample_size_n_sim_inner <- 1000 #Voi calculations for each point within each iteration
+settings$sample_sizes <- c(4000, 8000, 16000, 32000, Inf)
 
-case_study_gusto <- function(load_file=NULL, save_file=NULL)
+case_study_gusto <- function(load_file=NULL, save_file=NULL, seed=1234)
 {
   #assign("last.warning", NULL, envir = baseenv())
-  set.seed(1234)
+  set.seed(seed)
   results <<- list()
 
   data("gusto")
@@ -141,6 +144,7 @@ voi_by_sample_size <- function(n_sim, sample_sizes)
     model_matrix <- model.matrix(master_formula,sample)
     res <- tryCatch(
     {
+      require(glmnet)
       cv_reg <- cv.glmnet(model_matrix, sample$day30, family="binomial")
       reg <- glmnet(model_matrix, sample$day30, family = "binomial", lambda = cv_reg$lambda.min)
       if(sum(as.numeric(reg$beta))<2)
@@ -183,7 +187,8 @@ voi_by_sample_size <- function(n_sim, sample_sizes)
       voi_r <- voi_r + process_results(res,graphs="",th=settings$custom_th)$voi_r/n_sim
     }
 
-    out <- rbind(out,c(sample_sizes[i], voi_th=voi_th, voi_r=voi_r))
+    out <- rbind(out,c(machine_id=machine_id, sample_size=sample_sizes[i], voi_th=voi_th, voi_r=voi_r))
+    GRpush(out,T)
   }
   return(out)
 }
@@ -222,3 +227,9 @@ calc_auc <- function(reg_obj, x, y, n_sim=1000)
 
   return(c(auc=auc,optimism=optimism/n_sim))
 }
+
+
+
+case_study_gusto(seed = NULL)
+
+
