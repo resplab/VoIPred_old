@@ -195,10 +195,10 @@ library(tidyverse)
 # }
 
 # process the results
-sim_files <- list.files(here('simulation_result'))
+sim_files <- list.files(here('simulation_result','raw'))
 
 sim_results <- lapply(sim_files,function(x){
-  read_rds(here('simulation_result',x))
+  read_rds(here('simulation_result','raw',x))
 }) %>% 
   do.call(rbind,.)
 
