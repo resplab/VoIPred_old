@@ -1,9 +1,7 @@
 library(glmnet)
 library(VoIPred)
 library(rms)
-library(GRcomp)
 
-GRconnect("voipred")
 machine_id <- round(runif(1)*10^10)
 
 settings <- list()
