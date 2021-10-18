@@ -1,22 +1,26 @@
 library(glmnet)
 library(VoIPred)
 library(rms)
+library(GRcomp)
+
+GRconnect("voipred")
+machine_id <- round(runif(1)*10^10)
 
 settings <- list()
 settings$master_formula <- day30 ~ age + miloc + pmi + kill + pmin(sysbp,100) + lsp(pulse,50) + htn + dia
 settings$default_th <- 0.02
-settings$n_sim <- 100 #if 0 wont do this part
 settings$custom_th <- c(0.01,0.02,0.05,0.1)
+settings$n_sim <- 0 # if 0 wont do this part
 settings$subsample <- 1000
 settings$auc_n_sim <- 0   #If set to 0, it will not calculate AUC with optimism correction with the same n_sim.
-settings$sample_size_n_sim_outer <- 0 #if set to 0 will not do
+settings$sample_size_n_sim_outer <- 1 #if set to 0 will not do
 settings$sample_size_n_sim_inner <- 100 #Voi calculations for each point within each iteration
-settings$sample_sizes <- c(250, 500, 1000, 2000, 4000, 8000, 16000, 32000, Inf)
+settings$sample_sizes <- c(4000, 8000, 16000, 32000, Inf)
 
-case_study_gusto <- function(load_file=NULL, save_file=NULL)
+case_study_gusto <- function(load_file=NULL, save_file=NULL, seed=1234)
 {
   #assign("last.warning", NULL, envir = baseenv())
-  set.seed(1234)
+  set.seed(seed)
   results <<- list()
 
   data("gusto")
@@ -189,6 +193,7 @@ voi_by_sample_size <- function(n_sim, sample_sizes)
   return(out)
 }
 
+
 # save each run
 voi_by_sample_size_custom <- function(n_sim, sample_sizes)
 {
@@ -297,4 +302,3 @@ calc_auc <- function(reg_obj, x, y, n_sim=1000)
 
   return(c(auc=auc,optimism=optimism/n_sim))
 }
-
