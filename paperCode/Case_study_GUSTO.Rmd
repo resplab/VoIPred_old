@@ -5,7 +5,7 @@ output: html_document
 
 ```{r setup, include=FALSE, echo=FALSE}
 library(here)
-load_file=here("data","2021.10.07.RDS")
+load_file=here("simulation_result","2021.10.07.RDS")
 
 library(knitr)
 knitr::opts_chunk$set(echo = TRUE)
@@ -129,6 +129,46 @@ produce(results$res1)
 print(sprintf("voi at index threshold is: %.4f",results$voi_by_sample_size[dim(results$voi_by_sample_size)[1],2]))
 print(sprintf("voi_r at index threshold is: %.4f",results$voi_by_sample_size[dim(results$voi_by_sample_size)[1],3]))
 ```
+
+###Monte Carlo errors
+```{r echo=FALSE}
+#Monte Carlo errors
+  n_sim <- settings$n_sim
+  
+  
+  se_model_all <- sqrt(results$res0[2,'NB_model_all_s2']/n_sim-(results$res0[2,'NB_model']-results$res0[2,'NB_all'])^2/n_sim)
+  mu_model_all <- results$res0[2,'NB_model']-results$res0[2,'NB_all']
+  distance_model_all <- mu_model_all / se_model_all
+  print(sprintf("SE of diff and Monte Carlo sigma differences between NB_model and NB_all:%.6f [%.6f]", se_model_all, distance_model_all))
+  
+    se_model_max <- sqrt(results$res0[2,'NB_model_max_s2']/n_sim-(results$res0[2,'NB_model']-results$res0[2,'NB_max'])^2/n_sim)
+  mu_model_max <- results$res0[2,'NB_model']-results$res0[2,'NB_max']
+  distance_model_max <- mu_model_max / se_model_max
+  print(sprintf("SE of diff and Monte Carlo sigma differences between NB_model and NB_max:%.6f [%.6f]", se_model_max, distance_model_max))
+
+  
+  se_model_0 <- sqrt(results$res0[2,'NB_model_s2']/n_sim-(results$res0[2,'NB_model'])^2/n_sim)
+  mu_model_0 <- results$res0[2,'NB_model']
+  distance_model_0 <- mu_model_0 / se_model_0
+  print(sprintf("SE of diff and Monte Carlo sigma differences between NB_model and 0:%.6f [%.6f]", se_model_0, distance_model_0))
+  
+  se_all_0 <- sqrt(results$res0[2,'NB_all_s2']/n_sim-(results$res0[2,'NB_all'])^2/n_sim)
+  mu_all_0 <- results$res0[2,'NB_all']
+  distance_all_0 <- mu_all_0 / se_all_0
+  print(sprintf("SE of diff and Monte Carlo sigma differences between NB_all and 0:%.6f [%.6f]", se_all_0, distance_all_0))
+  
+  se_max_0 <- sqrt(results$res0[2,'NB_max_s2']/n_sim-(results$res0[2,'NB_max'])^2/n_sim)
+  mu_max_0 <- results$res0[2,'NB_max']
+  distance_max_0 <- mu_max_0 / se_max_0
+  print(sprintf("SE of diff and Monte Carlo sigma differences between NB_max and 0:%.6f [%.6f]", se_max_0, distance_max_0))
+
+
+print("Ordinary bootstrap:")
+produce(results$res0)
+print("Bayesian bootstrap:")
+produce(results$res1)
+```
+
 
 ### voi by sample size at mutiple threshold
 ```{r echo=FALSE}
