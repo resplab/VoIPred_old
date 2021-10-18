@@ -278,3 +278,5 @@ plot_decision_curve <- function(dc_data)
   lines(dc_data[,'lambda'],dc_data[,'NB_all'],type='l',ylim=c(0,max_y),col='black')
   lines(dc_data[,'lambda'],dc_data[,'NB_model'],type='l',ylim=c(0,max_y),col='red',lw=2)
 }
+
+

@@ -4,7 +4,8 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE, echo=FALSE}
-load_file=paste0(getwd(),"/../2021.10.07.RDS")
+library(here)
+load_file=here("data","2021.10.07.RDS")
 
 library(knitr)
 knitr::opts_chunk$set(echo = TRUE)
@@ -123,51 +124,98 @@ print("Bayesian bootstrap:")
 produce(results$res1)
 ```
 
-
-### voi by sample size
-```{r echo=FALSE}
-# data("gusto")
-# gusto$kill <- (as.numeric(gusto$Killip)>1)*1
-# results <- c()
-# set.seed(1234)
-# results$voi_by_sample_size <- voi_by_sample_size(1,settings$sample_sizes)
-
-if(!is.null(results$voi_by_sample_size))
-{
-  if(length(settings$custom_th)==1){
-  print("voi at index threshold")
-  plot(results$voi_by_sample_size[,1:2],type='l', log='x', xlab="Sample size", ylab="EVPI", col='red', lwd=2)
-  print("voi_r at index threshold")
-  plot(results$voi_by_sample_size[,c(1,3)],type='l', log='x', xlab="Sample size", ylab="Relative EVPI", col='red', lwd=2)
-  } else{
-    require(ggplot2)
-    require(tidyr)
-    
-    df_voi_th <- data.frame(sample=results$voi_by_sample_size[,1])
-    df_voi_th <- cbind(df_voi_th,results$voi_by_sample_size[,grep("voi_th",colnames(results$voi_by_sample_size))])
-    df_voi_r <- data.frame(sample=results$voi_by_sample_size[,1])
-    df_voi_r <- cbind(df_voi_r,results$voi_by_sample_size[,grep("voi_r",colnames(results$voi_by_sample_size))])
-    colnames(df_voi_th)[-1] <-  colnames(df_voi_r)[-1] <- settings$custom_th
-    df_voi_th <- pivot_longer(df_voi_th,cols=-1,names_to='Threshold',values_to="EVPI")
-    df_voi_r <- pivot_longer(df_voi_r,cols=-1,names_to='Threshold',values_to="EVPI")
-    
-    ggplot(data=df_voi_th,aes(x=sample,y=EVPI,color=Threshold)) +
-      geom_line(size=1.5, alpha = 0.7) +
-      theme_classic() +
-      xlab("Sample size") +
-      theme(legend.position = 'top')
-    
-    ggplot(data=df_voi_r,aes(x=sample,y=EVPI,color=Threshold)) +
-      geom_line(size=1.5, alpha = 0.7) +
-      theme_classic() +
-      ylab("Relative EVPI") +
-      xlab("Sample size") +
-      theme(legend.position = 'top')
-  }
-}
-```
-
 ### voi with full data
 ```{r echo=FALSE}
 print(sprintf("voi at index threshold is: %.4f",results$voi_by_sample_size[dim(results$voi_by_sample_size)[1],2]))
 print(sprintf("voi_r at index threshold is: %.4f",results$voi_by_sample_size[dim(results$voi_by_sample_size)[1],3]))
+```
+
+### voi by sample size at mutiple threshold
+```{r echo=FALSE}
+library(tidyverse)
+
+# Obtain EVPI & rEVPI across different thresholds;
+# 10 runs for each sample size
+# Average for EVPI and
+# Median for rEVPI (because of Inf values)
+
+# # set up for paralleization
+# set.seed(1234)
+# settings$custom_th <- c(0.01,0.02,0.05,0.1)
+# num_runs <- data.frame(n=10,sample_size=c(500,1000,2000,4000,8000,16000,32000,40830))
+# library(foreach)
+# library(doMC)
+# # setup parallel backend to use many processors
+# cores=detectCores()
+# registerDoMC(cores-3)
+
+# # save each result
+# tmp_results <- foreach(i=1:nrow(num_runs), .combine=cbind) %dopar% {
+#   voi_by_sample_size_custom(n_sim=num_runs$n[i],sample_sizes =num_runs$sample_size[i])
+# }
+
+# process the results
+sim_files <- list.files(here('simulation_result'))
+
+sim_results <- lapply(sim_files,function(x){
+  read_rds(here('simulation_result',x))
+}) %>% 
+  do.call(rbind,.)
+
+colnames(sim_results)[1] <- "sample_size"
+
+sim_results <- sim_results %>% 
+  as.data.frame()
+
+# write_csv(sim_results,here("data","simulation_result.csv"))
+
+# further processing to plot EVPI/rEVPI across the sample size for different thresholds
+voi_absolute <- sim_results  %>% 
+  group_by(sample_size) %>%
+  summarise_at(vars(contains("voi_th")),mean)
+
+voi_relative <- sim_results %>%
+  filter(sample_size != 500) %>% 
+  group_by(sample_size) %>%
+  summarise_at(vars(contains("voi_r")),median)
+
+require(ggplot2)
+require(tidyr)
+
+df_voi_th <- data.frame(sample=voi_absolute[,1])
+df_voi_th <- cbind(df_voi_th,voi_absolute[,grep("voi_th",colnames(voi_absolute))])
+df_voi_r <- data.frame(sample=voi_relative[,1])
+df_voi_r <- cbind(df_voi_r,voi_relative[,grep("voi_r",colnames(voi_relative))])
+colnames(df_voi_th)[-1] <-   settings$custom_th
+colnames(df_voi_r)[-1] <- colnames(df_voi_th)[-1]
+df_voi_th <- pivot_longer(df_voi_th,cols=-1,names_to='Threshold',values_to="EVPI")
+df_voi_r <- pivot_longer(df_voi_r,cols=-1,names_to='Threshold',values_to="EVPI")
+
+# plot
+ggplot(data=df_voi_th %>% 
+         mutate(log_sample_size = log(sample_size)),aes(x=sample_size,y=EVPI,color=Threshold)) +
+  geom_line(size=1.5, alpha = 0.7) +
+  theme_classic() +
+  xlab("sample size") +
+  theme(legend.position = 'top') +
+  # coord_trans(x = 'log10') +
+  scale_x_log10(breaks = scales::log_breaks(n = 10)) 
+
+ggplot(data=df_voi_th %>% 
+         mutate(log_sample_size = log(sample_size)),aes(x=sample_size,y=EVPI,color=Threshold)) +
+  geom_line(size=1.5, alpha = 0.7) +
+  theme_classic() +
+  xlab("sample size") +
+  theme(legend.position = 'top') +
+  scale_x_log10(breaks = scales::log_breaks(n = 10)) 
+
+ggplot(data=df_voi_r %>% 
+         mutate(log_sample_size = log(sample_size)),aes(x=sample_size,y=EVPI,color=Threshold)) +
+  geom_line(size=1.5, alpha = 0.7) +
+  theme_classic() +
+  ylab("Relative EVPI")+
+  xlab("sample size") +
+  theme(legend.position = 'top') +
+  scale_x_log10(breaks = scales::log_breaks(n = 10)) 
+
+```
