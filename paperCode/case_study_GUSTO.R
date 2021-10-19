@@ -13,7 +13,7 @@ settings$subsample <- 1000
 settings$auc_n_sim <- 0   #If set to 0, it will not calculate AUC with optimism correction with the same n_sim.
 settings$sample_size_n_sim_outer <- 1 #if set to 0 will not do
 settings$sample_size_n_sim_inner <- 100 #Voi calculations for each point within each iteration
-settings$sample_sizes <- c(4000, 8000, 16000, 32000, Inf)
+settings$sample_sizes <- c(500, 1000, 2000, 4000, 8000, 16000, 32000, Inf)
 
 case_study_gusto <- function(load_file=NULL, save_file=NULL, seed=1234)
 {
