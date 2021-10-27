@@ -247,11 +247,12 @@ df_voi_th <- pivot_longer(df_voi_th,cols=-c(1:2),names_to='Threshold',values_to=
 df_voi_r <- pivot_longer(df_voi_r,cols=-c(1:2),names_to='Threshold',values_to="EVPI")
 
 # plot
-fig.height = 7
-fig.width = 10
+fig.height = 8
+fig.width = 12
 res = 600
-txt_size <- 20
+txt_size <- 25
 lgd_size <- 14
+axis.size <- 25
 
 ggplot(data=df_voi_th %>% 
          mutate(log_sample_size = log(sample_size),
@@ -259,10 +260,12 @@ ggplot(data=df_voi_th %>%
   geom_line(size=1.5, alpha = 0.7) +
   theme_classic() +
   theme(text=element_text(size=txt_size),
-        legend.text=element_text(size=lgd_size))+
+        legend.text=element_text(size=lgd_size),
+        axis.text.x = element_text(size=axis.size),
+        axis.text.y = element_text(size=axis.size))+
   xlab("sample size") +
   theme(legend.position = 'top') +
-  scale_x_log10(breaks = scales::log_breaks(n = 10)) -> EVPI
+  scale_x_log10(breaks = scales::log_breaks(n = 6)) -> EVPI
 
 ggsave(here('figures','EVPI.png'),EVPI,width = fig.width,height=fig.height,dpi=res)
 
@@ -272,11 +275,13 @@ ggplot(data=df_voi_r %>%
   geom_line(size=1.5, alpha = 0.7) +
   theme_classic() +
     theme(text=element_text(size=txt_size),
-        legend.text=element_text(size=lgd_size))+
+        legend.text=element_text(size=lgd_size),
+        axis.text.x = element_text(size=axis.size),
+        axis.text.y = element_text(size=axis.size))+
   ylab("Relative EVPI") +
   xlab("sample size") +
   theme(legend.position = 'top') +
   # coord_trans(x = 'log10') +
-  scale_x_log10(breaks = scales::log_breaks(n = 10)) -> rEVPI
+  scale_x_log10(breaks = scales::log_breaks(n = 6)) -> rEVPI
 ggsave(here('figures','rEVPI.png'),rEVPI,width = fig.width,height=fig.height,dpi=res)
 ```
