@@ -221,9 +221,9 @@ process_results <- function(res, graphs=c("voi","summit","dc"),th=NULL)
   } else{
     index <- which(res[,'lambda'] %in% th)
     out <- list()
-    out$inb_current <- pmax(0,res[index,'NB_model'],res[index,'NB_all'])-pmax(0,res[index,'NB_all'])
-    out$inb_perfect <- mean(res[index,'NB_max']-pmax(0,res[index,'NB_all']))
-    out$voi_r <- out$inb_perfect/out$inb_current
+    out$inb_current <- pmax(0,res[,'NB_model'],res[,'NB_all'])-pmax(0,res[,'NB_all'])
+    out$inb_perfect <- res[,'NB_max']-pmax(0,res[,'NB_all'])
+    out$voi_r <- (out$inb_perfect/out$inb_current)[index]
   }
 
   if(!is.na(match("voi",graphs)))

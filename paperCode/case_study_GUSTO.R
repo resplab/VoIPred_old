@@ -12,7 +12,7 @@ settings$n_sim <- 0 # if 0 wont do this part
 settings$subsample <- 1000
 settings$auc_n_sim <- 0   #If set to 0, it will not calculate AUC with optimism correction with the same n_sim.
 settings$sample_size_n_sim_outer <- 1 #if set to 0 will not do
-settings$sample_size_n_sim_inner <- 100 #Voi calculations for each point within each iteration
+settings$sample_size_n_sim_inner <- 1000 #Voi calculations for each point within each iteration
 settings$sample_sizes <- c(500, 1000, 2000, 4000, 8000, 16000, 32000, Inf)
 
 case_study_gusto <- function(load_file=NULL, save_file=NULL, seed=1234)
@@ -186,20 +186,20 @@ voi_by_sample_size <- function(n_sim, sample_sizes)
     }
 
     out <- rbind(out,c(machine_id=machine_id, sample_size=sample_sizes[i], voi_th=voi_th, voi_r=voi_r))
-    GRpush(out,T)
+    # GRpush(out,T)
   }
   return(out)
 }
 
 
 # save each run
-voi_by_sample_size_custom <- function(n_sim, sample_sizes)
+voi_by_sample_size_custom <- function(n_sim, sample_sizes,type)
 {
   out <-NULL
 
   master_formula <- settings$master_formula
 
-  work_horse <- function(size)
+  work_horse <- function(size,Bayesian_bootstrap=F)
   {
     if(is.infinite(size))
     {
@@ -219,7 +219,7 @@ voi_by_sample_size_custom <- function(n_sim, sample_sizes)
         }
         else
         {
-          voi.glmnet(reg, model_matrix, sample$day30, n_sim = settings$sample_size_n_sim_inner, Bayesian_bootstrap = F)
+          voi.glmnet(reg, model_matrix, sample$day30, n_sim = settings$sample_size_n_sim_inner, Bayesian_bootstrap = Bayesian_bootstrap)
         }
       }, error=function(w)
       {
@@ -242,9 +242,11 @@ voi_by_sample_size_custom <- function(n_sim, sample_sizes)
 
     # voi_th <- voi_r <- rep(0,length(settings$custom_th))
 
-    valid_result <- 0
 
-    while(valid_result < n_sim)
+    if(type %in% c("both","regular")){
+    valid_result <- TRUE
+
+    while(valid_result)
     {
       if(is.infinite(sample_sizes[i])) sample_sizes[i] <- dim(gusto)[1]
 
@@ -254,12 +256,37 @@ voi_by_sample_size_custom <- function(n_sim, sample_sizes)
       voi_th <- res[index,'voi']
       voi_r <- process_results(res,graphs="",th=settings$custom_th)$voi_r
 
-      tmp_result <- c(sample_sizes[i], voi_th=voi_th,voi_r=voi_r)
+      tmp_result <- c(sample_sizes[i], voi_th=voi_th,voi_r=voi_r,Bayesian=F)
 
-      if(length(tmp_result) != 1){
-        write_rds(tmp_result,here("simulation_result",paste0("sim_",sample_sizes[i],"_",valid_result,".rds")))
-        valid_result <- valid_result + 1
+      if(length(tmp_result) > 2*length(settings$custom_th)){
+        print(tmp_result)
+        write_rds(tmp_result,here("simulation_result","raw0",paste0("sim_",sample_sizes[i],"_",n_sim,".rds")))
+        valid_result <- FALSE
       }
+    }
+    }
+
+    if(type %in% c("both","Bayesian")){
+
+    valid_result <- TRUE
+
+    while(valid_result)
+    {
+      if(is.infinite(sample_sizes[i])) sample_sizes[i] <- dim(gusto)[1]
+
+      res2 <- work_horse(sample_sizes[i],Bayesian_bootstrap=T)
+
+      index <- which(res2[,'lambda'] %in% settings$custom_th)
+      voi_th_Bayesian <- res2[index,'voi']
+      voi_r_Bayesian <- process_results(res2,graphs="",th=settings$custom_th)$voi_r
+      tmp_result <- c(sample_sizes[i], voi_th=voi_th_Bayesian,voi_r=voi_r_Bayesian,Bayesian=T)
+
+      if(length(tmp_result) > 2*length(settings$custom_th)){
+        print(tmp_result)
+        write_rds(tmp_result,here("simulation_result","raw1",paste0("sim_",sample_sizes[i],"_",n_sim,".rds")))
+        valid_result <- FALSE
+      }
+    }
     }
   }
 

@@ -180,28 +180,42 @@ library(tidyverse)
 # Median for rEVPI (because of Inf values)
 
 # # set up for paralleization
-# set.seed(1234)
-# settings$custom_th <- c(0.01,0.02,0.05,0.1)
-# num_runs <- data.frame(n=10,sample_size=c(500,1000,2000,4000,8000,16000,32000,40830))
+set.seed(1234)
+settings$custom_th <- c(0.01,0.02,0.05,0.1)
+settings$sample_size_n_sim_inner <- 1000
+sample_size <- c(500,1000,2000,4000,8000,16000,32000,40830)
+# num_runs <- lapply(1:10,function(x){ data.frame(n=x,sample_size=sample_size) }) %>% 
+#   do.call(rbind,.)
+# 
+# num_runs <- rbind(cbind(num_runs,type="regular"),
+#                   cbind(num_runs,type='Bayesian'))
 # library(foreach)
 # library(doMC)
 # # setup parallel backend to use many processors
 # cores=detectCores()
-# registerDoMC(cores-3)
-
+# registerDoMC(cores-1)
+# 
 # # save each result
-# tmp_results <- foreach(i=1:nrow(num_runs), .combine=cbind) %dopar% {
-#   voi_by_sample_size_custom(n_sim=num_runs$n[i],sample_sizes =num_runs$sample_size[i])
+# tmp_results <- foreach(i=1:nrow(undone_num_runs), .combine=cbind) %dopar% {
+#   voi_by_sample_size_custom(n_sim=undone_num_runs$n[i],sample_sizes =undone_num_runs$sample_size[i],type=undone_num_runs$type[i])
 # }
 
 # process the results
-sim_files <- list.files(here('simulation_result','raw'))
+sim_files <- list.files(here('simulation_result','raw0'))
 
 sim_results <- lapply(sim_files,function(x){
-  read_rds(here('simulation_result','raw',x))
+  read_rds(here('simulation_result','raw0',x))
 }) %>% 
   do.call(rbind,.)
 
+sim_files2 <- list.files(here('simulation_result','raw0'))
+
+sim_results2 <- lapply(sim_files2,function(x){
+  read_rds(here('simulation_result','raw1',x))
+}) %>% 
+  do.call(rbind,.)
+
+sim_results <- rbind(sim_results,sim_results2)
 colnames(sim_results)[1] <- "sample_size"
 
 sim_results <- sim_results %>% 
@@ -211,51 +225,58 @@ sim_results <- sim_results %>%
 
 # further processing to plot EVPI/rEVPI across the sample size for different thresholds
 voi_absolute <- sim_results  %>% 
-  group_by(sample_size) %>%
+  group_by(sample_size,Bayesian) %>%
   summarise_at(vars(contains("voi_th")),mean)
 
 voi_relative <- sim_results %>%
+  # mutate(voi_r1= ifelse(is.infinite(voi_r1),NA,voi_r1)) %>% 
   filter(sample_size != 500) %>% 
-  group_by(sample_size) %>%
-  summarise_at(vars(contains("voi_r")),median)
+  group_by(sample_size,Bayesian) %>%
+  summarise_at(vars(contains("voi_r")),function(x){median(x,na.rm=T)})
 
 require(ggplot2)
 require(tidyr)
 
-df_voi_th <- data.frame(sample=voi_absolute[,1])
+df_voi_th <- data.frame(sample=voi_absolute[,1],Bayesian=voi_absolute[,2])
 df_voi_th <- cbind(df_voi_th,voi_absolute[,grep("voi_th",colnames(voi_absolute))])
-df_voi_r <- data.frame(sample=voi_relative[,1])
+df_voi_r <- data.frame(sample=voi_relative[,1],Bayesian=voi_relative[,2])
 df_voi_r <- cbind(df_voi_r,voi_relative[,grep("voi_r",colnames(voi_relative))])
-colnames(df_voi_th)[-1] <-   settings$custom_th
-colnames(df_voi_r)[-1] <- colnames(df_voi_th)[-1]
-df_voi_th <- pivot_longer(df_voi_th,cols=-1,names_to='Threshold',values_to="EVPI")
-df_voi_r <- pivot_longer(df_voi_r,cols=-1,names_to='Threshold',values_to="EVPI")
+colnames(df_voi_th)[-c(1:2)] <-   settings$custom_th
+colnames(df_voi_r)[-c(1:2)] <- colnames(df_voi_th)[-c(1:2)]
+df_voi_th <- pivot_longer(df_voi_th,cols=-c(1:2),names_to='Threshold',values_to="EVPI")
+df_voi_r <- pivot_longer(df_voi_r,cols=-c(1:2),names_to='Threshold',values_to="EVPI")
 
 # plot
+fig.height = 7
+fig.width = 10
+res = 600
+txt_size <- 20
+lgd_size <- 14
+
 ggplot(data=df_voi_th %>% 
-         mutate(log_sample_size = log(sample_size)),aes(x=sample_size,y=EVPI,color=Threshold)) +
+         mutate(log_sample_size = log(sample_size),
+                Bootstrap=if_else(Bayesian==1,"Bayesian","Regular")),aes(x=sample_size,y=EVPI,color=Threshold,linetype=Bootstrap)) +
   geom_line(size=1.5, alpha = 0.7) +
   theme_classic() +
+  theme(text=element_text(size=txt_size),
+        legend.text=element_text(size=lgd_size))+
+  xlab("sample size") +
+  theme(legend.position = 'top') +
+  scale_x_log10(breaks = scales::log_breaks(n = 10)) -> EVPI
+
+ggsave(here('figures','EVPI.png'),EVPI,width = fig.width,height=fig.height,dpi=res)
+
+ggplot(data=df_voi_r %>% 
+         mutate(log_sample_size = log(sample_size),
+                Bootstrap=if_else(Bayesian==1,"Bayesian","Regular")),aes(x=sample_size,y=EVPI,color=Threshold,linetype=Bootstrap)) +
+  geom_line(size=1.5, alpha = 0.7) +
+  theme_classic() +
+    theme(text=element_text(size=txt_size),
+        legend.text=element_text(size=lgd_size))+
+  ylab("Relative EVPI") +
   xlab("sample size") +
   theme(legend.position = 'top') +
   # coord_trans(x = 'log10') +
-  scale_x_log10(breaks = scales::log_breaks(n = 10)) 
-
-ggplot(data=df_voi_th %>% 
-         mutate(log_sample_size = log(sample_size)),aes(x=sample_size,y=EVPI,color=Threshold)) +
-  geom_line(size=1.5, alpha = 0.7) +
-  theme_classic() +
-  xlab("sample size") +
-  theme(legend.position = 'top') +
-  scale_x_log10(breaks = scales::log_breaks(n = 10)) 
-
-ggplot(data=df_voi_r %>% 
-         mutate(log_sample_size = log(sample_size)),aes(x=sample_size,y=EVPI,color=Threshold)) +
-  geom_line(size=1.5, alpha = 0.7) +
-  theme_classic() +
-  ylab("Relative EVPI")+
-  xlab("sample size") +
-  theme(legend.position = 'top') +
-  scale_x_log10(breaks = scales::log_breaks(n = 10)) 
-
+  scale_x_log10(breaks = scales::log_breaks(n = 10)) -> rEVPI
+ggsave(here('figures','rEVPI.png'),rEVPI,width = fig.width,height=fig.height,dpi=res)
 ```
