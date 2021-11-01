@@ -4,7 +4,8 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE, echo=FALSE}
-load_file=paste0(getwd(),"/Results.RDS")
+library(here)
+load_file=here("simulation_result","2021.10.07.RDS")
 
 library(knitr)
 knitr::opts_chunk$set(echo = TRUE)
@@ -71,10 +72,10 @@ print(sprintf("Default threshold is: %f",settings$default_th))
 produce <- function(res)
 {
   x <- which(res[,'lambda']==settings$default_th)
-
-  print(sprintf("Expected NB at default threshold without any model:%.4f",max(0,res[x,'NB_all'])))
-  print(sprintf("INB of the proposed model at default threshold:%.4f",res[x,'NB_model']))
-  print(sprintf("INB of the correct model at default threshold:%.4f",res[x,'NB_max']))
+  baseline_NB <- max(0,res[x,'NB_all'])
+  print(sprintf("Expected NB at default threshold without any model:%.4f",baseline_NB))
+  print(sprintf("INB of the proposed model at default threshold:%.4f",res[x,'NB_model']-baseline_NB))
+  print(sprintf("INB of the correct model at default threshold:%.4f",res[x,'NB_max']-baseline_NB))
   print(sprintf("voi at default threshold:%.4f",res[x,'voi']))
   voi_r <- (res[x,'NB_max']-max(0,res[x,'NB_all']))/(res[x,'NB_model']-max(0,res[x,'NB_all']))
   print(sprintf("Relative voi at default threshold:%.4f", voi_r))
@@ -85,6 +86,36 @@ produce <- function(res)
   print(sprintf("Area under INB curve with perfect information:%.4f", area_under_inb_perfect))
   global_voi_r <- area_under_inb_perfect/area_under_inb_current
   print(sprintf("Global relative voi:%.4f", global_voi_r))
+  
+  #Monte Carlo errors
+  n_sim <- settings$n_sim
+  
+  
+  se_model_all <- sqrt(results$res0[2,'NB_model_all_s2']/n_sim-(results$res0[2,'NB_model']-results$res0[2,'NB_all'])^2/n_sim)
+  mu_model_all <- results$res0[2,'NB_model']-results$res0[2,'NB_all']
+  distance_model_all <- mu_model_all / se_model_all
+  print(sprintf("SE of diff and Monte Carlo sigma differences between NB_model and NB_all:%.6f [%.6f]", se_model_all, distance_model_all))
+  
+    se_model_max <- sqrt(results$res0[2,'NB_model_max_s2']/n_sim-(results$res0[2,'NB_model']-results$res0[2,'NB_max'])^2/n_sim)
+  mu_model_max <- results$res0[2,'NB_model']-results$res0[2,'NB_max']
+  distance_model_max <- mu_model_max / se_model_max
+  print(sprintf("SE of diff and Monte Carlo sigma differences between NB_model and NB_max:%.6f [%.6f]", se_model_max, distance_model_max))
+
+  
+  se_model_0 <- sqrt(results$res0[2,'NB_model_s2']/n_sim-(results$res0[2,'NB_model'])^2/n_sim)
+  mu_model_0 <- results$res0[2,'NB_model']
+  distance_model_0 <- mu_model_0 / se_model_0
+  print(sprintf("SE of diff and Monte Carlo sigma differences between NB_model and 0:%.6f [%.6f]", se_model_0, distance_model_0))
+  
+  se_all_0 <- sqrt(results$res0[2,'NB_all_s2']/n_sim-(results$res0[2,'NB_all'])^2/n_sim)
+  mu_all_0 <- results$res0[2,'NB_all']
+  distance_all_0 <- mu_all_0 / se_all_0
+  print(sprintf("SE of diff and Monte Carlo sigma differences between NB_all and 0:%.6f [%.6f]", se_all_0, distance_all_0))
+  
+  se_max_0 <- sqrt(results$res0[2,'NB_max_s2']/n_sim-(results$res0[2,'NB_max'])^2/n_sim)
+  mu_max_0 <- results$res0[2,'NB_max']
+  distance_max_0 <- mu_max_0 / se_max_0
+  print(sprintf("SE of diff and Monte Carlo sigma differences between NB_max and 0:%.6f [%.6f]", se_max_0, distance_max_0))
 }
 
 print("Ordinary bootstrap:")
@@ -93,20 +124,164 @@ print("Bayesian bootstrap:")
 produce(results$res1)
 ```
 
-
-### voi by sample size
-```{r echo=FALSE}
-if(!is.null(results$voi_by_sample_size))
-{
-  print("voi at index threshold")
-  plot(results$voi_by_sample_size[,1:2],type='l', log='x', xlab="Sample size", ylab="EVPI", col='red', lwd=2)
-  
-  print("voi_r at index threshold")
-  plot(results$voi_by_sample_size[,c(1,3)],type='l', log='x', xlab="Sample size", ylab="Relative EVPI", col='red', lwd=2)
-}
-```
-
 ### voi with full data
 ```{r echo=FALSE}
 print(sprintf("voi at index threshold is: %.4f",results$voi_by_sample_size[dim(results$voi_by_sample_size)[1],2]))
 print(sprintf("voi_r at index threshold is: %.4f",results$voi_by_sample_size[dim(results$voi_by_sample_size)[1],3]))
+```
+
+###Monte Carlo errors
+```{r echo=FALSE}
+#Monte Carlo errors
+  n_sim <- settings$n_sim
+  
+  
+  se_model_all <- sqrt(results$res0[2,'NB_model_all_s2']/n_sim-(results$res0[2,'NB_model']-results$res0[2,'NB_all'])^2/n_sim)
+  mu_model_all <- results$res0[2,'NB_model']-results$res0[2,'NB_all']
+  distance_model_all <- mu_model_all / se_model_all
+  print(sprintf("SE of diff and Monte Carlo sigma differences between NB_model and NB_all:%.6f [%.6f]", se_model_all, distance_model_all))
+  
+    se_model_max <- sqrt(results$res0[2,'NB_model_max_s2']/n_sim-(results$res0[2,'NB_model']-results$res0[2,'NB_max'])^2/n_sim)
+  mu_model_max <- results$res0[2,'NB_model']-results$res0[2,'NB_max']
+  distance_model_max <- mu_model_max / se_model_max
+  print(sprintf("SE of diff and Monte Carlo sigma differences between NB_model and NB_max:%.6f [%.6f]", se_model_max, distance_model_max))
+
+  
+  se_model_0 <- sqrt(results$res0[2,'NB_model_s2']/n_sim-(results$res0[2,'NB_model'])^2/n_sim)
+  mu_model_0 <- results$res0[2,'NB_model']
+  distance_model_0 <- mu_model_0 / se_model_0
+  print(sprintf("SE of diff and Monte Carlo sigma differences between NB_model and 0:%.6f [%.6f]", se_model_0, distance_model_0))
+  
+  se_all_0 <- sqrt(results$res0[2,'NB_all_s2']/n_sim-(results$res0[2,'NB_all'])^2/n_sim)
+  mu_all_0 <- results$res0[2,'NB_all']
+  distance_all_0 <- mu_all_0 / se_all_0
+  print(sprintf("SE of diff and Monte Carlo sigma differences between NB_all and 0:%.6f [%.6f]", se_all_0, distance_all_0))
+  
+  se_max_0 <- sqrt(results$res0[2,'NB_max_s2']/n_sim-(results$res0[2,'NB_max'])^2/n_sim)
+  mu_max_0 <- results$res0[2,'NB_max']
+  distance_max_0 <- mu_max_0 / se_max_0
+  print(sprintf("SE of diff and Monte Carlo sigma differences between NB_max and 0:%.6f [%.6f]", se_max_0, distance_max_0))
+
+
+print("Ordinary bootstrap:")
+produce(results$res0)
+print("Bayesian bootstrap:")
+produce(results$res1)
+```
+
+
+### voi by sample size at mutiple threshold
+```{r echo=FALSE}
+library(tidyverse)
+
+# Obtain EVPI & rEVPI across different thresholds;
+# 10 runs for each sample size
+# Average for EVPI and
+# Median for rEVPI (because of Inf values)
+
+# # set up for paralleization
+set.seed(1234)
+settings$custom_th <- c(0.01,0.02,0.05,0.1)
+settings$sample_size_n_sim_inner <- 1000
+sample_size <- c(500,1000,2000,4000,8000,16000,32000,40830)
+# num_runs <- lapply(1:10,function(x){ data.frame(n=x,sample_size=sample_size) }) %>% 
+#   do.call(rbind,.)
+# 
+# num_runs <- rbind(cbind(num_runs,type="regular"),
+#                   cbind(num_runs,type='Bayesian'))
+# library(foreach)
+# library(doMC)
+# # setup parallel backend to use many processors
+# cores=detectCores()
+# registerDoMC(cores-1)
+# 
+# # save each result
+# tmp_results <- foreach(i=1:nrow(undone_num_runs), .combine=cbind) %dopar% {
+#   voi_by_sample_size_custom(n_sim=undone_num_runs$n[i],sample_sizes =undone_num_runs$sample_size[i],type=undone_num_runs$type[i])
+# }
+
+# process the results
+sim_files <- list.files(here('simulation_result','raw0'))
+
+sim_results <- lapply(sim_files,function(x){
+  read_rds(here('simulation_result','raw0',x))
+}) %>% 
+  do.call(rbind,.)
+
+sim_files2 <- list.files(here('simulation_result','raw0'))
+
+sim_results2 <- lapply(sim_files2,function(x){
+  read_rds(here('simulation_result','raw1',x))
+}) %>% 
+  do.call(rbind,.)
+
+sim_results <- rbind(sim_results,sim_results2)
+colnames(sim_results)[1] <- "sample_size"
+
+sim_results <- sim_results %>% 
+  as.data.frame()
+
+# write_csv(sim_results,here("data","simulation_result.csv"))
+
+# further processing to plot EVPI/rEVPI across the sample size for different thresholds
+voi_absolute <- sim_results  %>% 
+  group_by(sample_size,Bayesian) %>%
+  summarise_at(vars(contains("voi_th")),mean)
+
+voi_relative <- sim_results %>%
+  # mutate(voi_r1= ifelse(is.infinite(voi_r1),NA,voi_r1)) %>% 
+  filter(sample_size != 500) %>% 
+  group_by(sample_size,Bayesian) %>%
+  summarise_at(vars(contains("voi_r")),function(x){median(x,na.rm=T)})
+
+require(ggplot2)
+require(tidyr)
+
+df_voi_th <- data.frame(sample=voi_absolute[,1],Bayesian=voi_absolute[,2])
+df_voi_th <- cbind(df_voi_th,voi_absolute[,grep("voi_th",colnames(voi_absolute))])
+df_voi_r <- data.frame(sample=voi_relative[,1],Bayesian=voi_relative[,2])
+df_voi_r <- cbind(df_voi_r,voi_relative[,grep("voi_r",colnames(voi_relative))])
+colnames(df_voi_th)[-c(1:2)] <-   settings$custom_th
+colnames(df_voi_r)[-c(1:2)] <- colnames(df_voi_th)[-c(1:2)]
+df_voi_th <- pivot_longer(df_voi_th,cols=-c(1:2),names_to='Threshold',values_to="EVPI")
+df_voi_r <- pivot_longer(df_voi_r,cols=-c(1:2),names_to='Threshold',values_to="EVPI")
+
+# plot
+fig.height = 8
+fig.width = 12
+res = 600
+txt_size <- 25
+lgd_size <- 14
+axis.size <- 25
+
+ggplot(data=df_voi_th %>% 
+         mutate(log_sample_size = log(sample_size),
+                Bootstrap=if_else(Bayesian==1,"Bayesian","Regular")),aes(x=sample_size,y=EVPI,color=Threshold,linetype=Bootstrap)) +
+  geom_line(size=1.5, alpha = 0.7) +
+  theme_classic() +
+  theme(text=element_text(size=txt_size),
+        legend.text=element_text(size=lgd_size),
+        axis.text.x = element_text(size=axis.size),
+        axis.text.y = element_text(size=axis.size))+
+  xlab("sample size") +
+  theme(legend.position = 'top') +
+  scale_x_log10(breaks = scales::log_breaks(n = 6)) -> EVPI
+
+ggsave(here('figures','EVPI.png'),EVPI,width = fig.width,height=fig.height,dpi=res)
+
+ggplot(data=df_voi_r %>% 
+         mutate(log_sample_size = log(sample_size),
+                Bootstrap=if_else(Bayesian==1,"Bayesian","Regular")),aes(x=sample_size,y=EVPI,color=Threshold,linetype=Bootstrap)) +
+  geom_line(size=1.5, alpha = 0.7) +
+  theme_classic() +
+    theme(text=element_text(size=txt_size),
+        legend.text=element_text(size=lgd_size),
+        axis.text.x = element_text(size=axis.size),
+        axis.text.y = element_text(size=axis.size))+
+  ylab("Relative EVPI") +
+  xlab("sample size") +
+  theme(legend.position = 'top') +
+  # coord_trans(x = 'log10') +
+  scale_x_log10(breaks = scales::log_breaks(n = 6)) -> rEVPI
+ggsave(here('figures','rEVPI.png'),rEVPI,width = fig.width,height=fig.height,dpi=res)
+```

@@ -1,5 +1,6 @@
 #' @import mvtnorm
 #' @import glmnet
+#' @import progress
 
 aux <- new.env()
 
@@ -65,7 +66,7 @@ voi.glm<-function(reg_obj, n_sim=1000, bootstrap=0, lambdas=(1:99)/100)
 
 
 #' @export
-#' @param reg_obj: any object that you can aplpy predict with new data to get predictions
+#' @param reg_obj: any object that you can apply predict with new data to get predictions
 #' @param x: The model matrix of predictors
 #' @param y: The vector of responses
 voi.glmnet <- function(reg_obj, x, y, n_sim=1000, lambdas=(1:99)/100, Bayesian_bootstrap=F, empirical=F)
@@ -84,12 +85,22 @@ voi.glmnet <- function(reg_obj, x, y, n_sim=1000, lambdas=(1:99)/100, Bayesian_b
   NB_all <- NB_model
   NB_max <- NB_model
 
+  NB_model_s2 <- rep(0, length(lambdas))
+  NB_all_s2 <- NB_model_s2
+  NB_max_s2 <- NB_model_s2
+  NB_model_all_s2 <- NB_model_s2
+  NB_model_max_s2 <- NB_model_s2
+  NB_all_max_s2 <- NB_model_s2
+
+  p_win_model <- p_win_all <- p_win_none <- rep(0, length(lambdas))
+
   dc_model <- NB_model
   dc_all <- NB_model
 
   optimism <- NB_model
 
   aux$bs_coeffs <- matrix(NA,nrow=n_sim, ncol=dim(coefficients(reg_obj)))
+
   colnames(aux$bs_coeffs) <- rownames(coefficients(reg_obj))
 
   for(j in 1:length(lambdas))
@@ -98,12 +109,22 @@ voi.glmnet <- function(reg_obj, x, y, n_sim=1000, lambdas=(1:99)/100, Bayesian_b
     dc_all[j] <- dc_all[j] + mean((y - (1 - y) * lambdas[j] / (1 - lambdas[j])) * 1)
   }
 
+  pb <- progress::progress_bar$new(total=n_sim)
+
   for(i in 1:n_sim)
   {
-    cat(".")
-    weights <- bootstrap(sample_size, Bayesian = Bayesian_bootstrap)
-    tmp <- cv.glmnet(x=x, y=y, family="binomial",weights = as.vector(weights))
-    bs_reg <- glmnet(x=x, y=y, family="binomial", lambda=tmp$lambda.min, weights=as.vector(weights))
+    pb$tick()
+    repeat
+    {
+      weights <- bootstrap(sample_size, Bayesian = Bayesian_bootstrap)
+      issues <- F
+      tryCatch(
+      {
+        tmp <- cv.glmnet(x=x, y=y, family="binomial",weights = as.vector(weights))
+        bs_reg <- glmnet(x=x, y=y, family="binomial", lambda=tmp$lambda.min, weights=as.vector(weights))
+      },warning=function(cond) {message("Warning occured! repeating with a new sample"); issues<- T; })
+      if(!issues) break
+    }
 
     aux$bs_coeffs[i,] <- t(as.matrix(coefficients(bs_reg)))
 
@@ -113,9 +134,21 @@ voi.glmnet <- function(reg_obj, x, y, n_sim=1000, lambdas=(1:99)/100, Bayesian_b
 
     for(j in 1:length(lambdas))
     {
-      NB_model[j] <- NB_model[j] + mean((p - (1 - p) * lambdas[j] / (1 - lambdas[j])) * (pi > lambdas[j]))
-      NB_all[j] <- NB_all[j] + mean((p - (1 - p) * lambdas[j] / (1 - lambdas[j])) * 1)
-      NB_max[j] <- NB_max[j] + mean((p - (1 - p) * lambdas[j] / (1 - lambdas[j])) * (p > lambdas[j]))
+      tmp1 <- mean((p - (1 - p) * lambdas[j] / (1 - lambdas[j])) * (pi > lambdas[j]))
+      NB_model[j] <- NB_model[j] + tmp1
+      NB_model_s2[j] <- NB_model_s2[j] + tmp1^2
+      tmp2 <- mean((p - (1 - p) * lambdas[j] / (1 - lambdas[j])) * 1)
+      NB_all[j] <- NB_all[j] + tmp2
+      NB_all_s2[j] <- NB_all_s2[j] + tmp2^2
+      tmp3 <- mean((p - (1 - p) * lambdas[j] / (1 - lambdas[j])) * (p > lambdas[j]))
+      NB_max[j] <- NB_max[j] + tmp3
+      NB_max_s2[j] <- NB_max_s2[j] + tmp3^2
+      NB_model_all_s2[j] <- NB_model_all_s2[j] + (tmp1-tmp2)^2
+      NB_model_max_s2[j] <- NB_model_max_s2[j] + (tmp1-tmp3)^2
+      NB_all_max_s2[j] <- NB_all_max_s2[j] + (tmp2-tmp3)^2
+
+      winner <- which.max(c(tmp1,tmp2,0))
+      if(winner==1) p_win_model[j] <- p_win_model[j]+1 else if(winner==2) p_win_all[j] <- p_win_all[j]+1 else p_win_none[j]<-p_win_none[j]+1
 
       dc_model_int <- sum((y + (1 - y) * lambdas[j] / (1 - lambdas[j])) * (p > lambdas[j]) * weights) / sum(weights)
       dc_model_ext <- mean((y + (1 - y) * lambdas[j] / (1 - lambdas[j])) * (p > lambdas[j]))
@@ -126,11 +159,21 @@ voi.glmnet <- function(reg_obj, x, y, n_sim=1000, lambdas=(1:99)/100, Bayesian_b
   NB_model <- NB_model / n_sim
   NB_all <- NB_all / n_sim
   NB_max <- NB_max / n_sim
+  NB_model_s2 <- NB_model_s2 / n_sim
+  NB_all_s2 <- NB_all_s2 / n_sim
+  NB_max_s2 <- NB_max_s2 / n_sim
+  NB_model_all_s2 <- NB_model_all_s2 / n_sim
+  NB_model_max_s2 <- NB_model_max_s2 / n_sim
+  NB_all_max_s2 <- NB_all_max_s2 / n_sim
+  p_win_model <- p_win_model/n_sim
+  p_win_all <- p_win_all/n_sim
+  p_win_none <- p_win_none/n_sim
+
   optimism <- optimism / n_sim
 
   voi <- (NB_max-pmax(0,NB_model,NB_all))
 
-  res <-cbind(lambda=lambdas, voi=voi, NB_all=NB_all, NB_model=NB_model, NB_max=NB_max, dc_model=dc_model, dc_all=dc_all, optimism=optimism)
+  res <-cbind(lambda=lambdas, voi=voi, NB_all=NB_all, NB_model=NB_model, NB_max=NB_max, p_win_model=p_win_model, p_win_all=p_win_all, p_win_none=p_win_none, dc_model=dc_model, dc_all=dc_all, optimism=optimism, NB_all_s2=NB_all_s2, NB_model_s2=NB_model_s2, NB_max_s2=NB_max_s2, NB_model_all_s2=NB_model_all_s2, NB_model_max_s2=NB_model_max_s2, NB_all_max_s2=NB_all_max_s2)
 
   return(res)
 }
@@ -168,12 +211,20 @@ bootstrap <- function (n, Bayesian=F)
 
 
 #' @export
-process_results <- function(res, graphs=c("voi","summit","dc"))
+process_results <- function(res, graphs=c("voi","summit","dc"),th=NULL)
 {
+  if(is.null(th)){
   out <- list()
   out$inb_current <- mean(pmax(0,res[,'NB_model'],res[,'NB_all'])-pmax(0,res[,'NB_all']))
   out$inb_perfect <- mean(res[,'NB_max']-pmax(0,res[,'NB_all']))
   out$voi_r <- out$inb_perfect/out$inb_current
+  } else{
+    index <- which(res[,'lambda'] %in% th)
+    out <- list()
+    out$inb_current <- pmax(0,res[,'NB_model'],res[,'NB_all'])-pmax(0,res[,'NB_all'])
+    out$inb_perfect <- res[,'NB_max']-pmax(0,res[,'NB_all'])
+    out$voi_r <- (out$inb_perfect/out$inb_current)[index]
+  }
 
   if(!is.na(match("voi",graphs)))
   {
@@ -196,6 +247,7 @@ process_results <- function(res, graphs=c("voi","summit","dc"))
   }
 
   return(out)
+
 }
 
 
@@ -226,3 +278,5 @@ plot_decision_curve <- function(dc_data)
   lines(dc_data[,'lambda'],dc_data[,'NB_all'],type='l',ylim=c(0,max_y),col='black')
   lines(dc_data[,'lambda'],dc_data[,'NB_model'],type='l',ylim=c(0,max_y),col='red',lw=2)
 }
+
+

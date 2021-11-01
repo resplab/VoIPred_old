@@ -1,22 +1,28 @@
 library(glmnet)
 library(VoIPred)
+library(rms)
+
+machine_id <- round(runif(1)*10^10)
 
 settings <- list()
-settings$master_formula <- day30 ~ sex + age + dia + miloc + pmi + htn + smk + kill + tx
-settings$default_th <- 0.1
-settings$n_sim <- 1000 #if 0 wont do this part
+settings$master_formula <- day30 ~ age + miloc + pmi + kill + pmin(sysbp,100) + lsp(pulse,50) + htn + dia
+settings$default_th <- 0.02
+settings$custom_th <- c(0.01,0.02,0.05,0.1)
+settings$n_sim <- 0 # if 0 wont do this part
 settings$subsample <- 1000
 settings$auc_n_sim <- 0   #If set to 0, it will not calculate AUC with optimism correction with the same n_sim.
-settings$sample_size_n_sim_outer <- 0 #if set to 0 will not do
-settings$sample_size_n_sim_inner <- 100 #Voi calculations for each point witin each iteration
-settings$sample_sizes <- c(250, 500, 1000, 2000, 4000, 8000, 16000, 32000, Inf)
+settings$sample_size_n_sim_outer <- 1 #if set to 0 will not do
+settings$sample_size_n_sim_inner <- 1000 #Voi calculations for each point within each iteration
+settings$sample_sizes <- c(500, 1000, 2000, 4000, 8000, 16000, 32000, Inf)
 
-case_study_gusto <- function(load_file=NULL, save_file=NULL)
+case_study_gusto <- function(load_file=NULL, save_file=NULL, seed=1234)
 {
-  set.seed(1234)
+  #assign("last.warning", NULL, envir = baseenv())
+  set.seed(seed)
   results <<- list()
 
   data("gusto")
+  #gusto <<- gusto[which(gusto$tx=="SK"),]
   gusto$kill <<- (as.numeric(gusto$Killip)>1)*1
 
   if(is.null(load_file))
@@ -92,7 +98,7 @@ case_study_gusto <- function(load_file=NULL, save_file=NULL)
     )
 
     #rownames(table_1) <- colnames(VoIPred:::aux$coeffs)
-    write.table(results$table_1,"clipboard",row.names = T)
+    # write.table(results$table_1,"clipboard",row.names = T)
   }
 
   if(!is.null(save_file))
@@ -135,23 +141,24 @@ voi_by_sample_size <- function(n_sim, sample_sizes)
 
     model_matrix <- model.matrix(master_formula,sample)
     res <- tryCatch(
-    {
-      cv_reg <- cv.glmnet(model_matrix, sample$day30, family="binomial")
-      reg <- glmnet(model_matrix, sample$day30, family = "binomial", lambda = cv_reg$lambda.min)
-      if(sum(as.numeric(reg$beta))<2)
       {
-        warning("Degenerate model!")
-      }
-      else
+        require(glmnet)
+        cv_reg <- cv.glmnet(model_matrix, sample$day30, family="binomial")
+        reg <- glmnet(model_matrix, sample$day30, family = "binomial", lambda = cv_reg$lambda.min)
+        if(sum(as.numeric(reg$beta))<2)
+        {
+          warning("Degenerate model!")
+        }
+        else
+        {
+          voi.glmnet(reg, model_matrix, sample$day30, n_sim = settings$sample_size_n_sim_inner, Bayesian_bootstrap = F)
+        }
+      }, error=function(w)
       {
-        voi.glmnet(reg, model_matrix, sample$day30, n_sim = settings$sample_size_n_sim_inner, Bayesian_bootstrap = F)
+        message("ERROR:",w)
+        return(work_horse(size))
       }
-    }, error=function(w)
-    {
-      message("ERROR:",w)
-      return(work_horse(size))
-    }
-    , warning=function(w)
+      , warning=function(w)
       {
         message("WARNING:",w)
         return(work_horse(size))
@@ -164,8 +171,8 @@ voi_by_sample_size <- function(n_sim, sample_sizes)
   for(i in 1:length(sample_sizes))
   {
     cat("\nsample size:",sample_sizes[i],"\n")
-    voi_th <- 0
-    voi_r <- 0
+
+    voi_th <- voi_r <- rep(0,length(settings$custom_th))
 
     for(j in 1:n_sim)
     {
@@ -173,18 +180,121 @@ voi_by_sample_size <- function(n_sim, sample_sizes)
 
       if(is.infinite(sample_sizes[i])) sample_sizes[i] <- dim(gusto)[1]
 
-      index <- which(res[,'lambda']==settings$default_th)
+      index <- which(res[,'lambda'] %in% settings$custom_th)
       voi_th <- voi_th + res[index,'voi']/n_sim
-      voi_r <- voi_r + process_results(res,graphs="")$voi_r/n_sim
+      voi_r <- voi_r + process_results(res,graphs="",th=settings$custom_th)$voi_r/n_sim
     }
 
-    out <- rbind(out,c(sample_sizes[i], voi_th=voi_th, voi_r=voi_r))
+    out <- rbind(out,c(machine_id=machine_id, sample_size=sample_sizes[i], voi_th=voi_th, voi_r=voi_r))
+    # GRpush(out,T)
   }
   return(out)
 }
 
 
+# save each run
+voi_by_sample_size_custom <- function(n_sim, sample_sizes,type)
+{
+  out <-NULL
 
+  master_formula <- settings$master_formula
+
+  work_horse <- function(size,Bayesian_bootstrap=F)
+  {
+    if(is.infinite(size))
+    {
+      sample <- gusto
+    }
+    else
+      sample <- gusto[sample(1:dim(gusto)[1],size,replace=F),]
+
+    model_matrix <- model.matrix(master_formula,sample)
+    res <- tryCatch(
+      {
+        cv_reg <- cv.glmnet(model_matrix, sample$day30, family="binomial")
+        reg <- glmnet(model_matrix, sample$day30, family = "binomial", lambda = cv_reg$lambda.min)
+        if(sum(as.numeric(reg$beta))<2)
+        {
+          # warning("Degenerate model!")
+        }
+        else
+        {
+          voi.glmnet(reg, model_matrix, sample$day30, n_sim = settings$sample_size_n_sim_inner, Bayesian_bootstrap = Bayesian_bootstrap)
+        }
+      }, error=function(w)
+      {
+        # message("ERROR:",w)
+        return(work_horse(size))
+      }
+      , warning=function(w)
+      {
+        # message("WARNING:",w)
+        return(work_horse(size))
+      }
+    )
+
+    return(res)
+  }
+
+  for(i in 1:length(sample_sizes))
+  {
+    cat("\nsample size:",sample_sizes[i],"\n")
+
+    # voi_th <- voi_r <- rep(0,length(settings$custom_th))
+
+
+    if(type %in% c("both","regular")){
+    valid_result <- TRUE
+
+    while(valid_result)
+    {
+      if(is.infinite(sample_sizes[i])) sample_sizes[i] <- dim(gusto)[1]
+
+      res <- work_horse(sample_sizes[i])
+
+      index <- which(res[,'lambda'] %in% settings$custom_th)
+      voi_th <- res[index,'voi']
+      voi_r <- process_results(res,graphs="",th=settings$custom_th)$voi_r
+
+      tmp_result <- c(sample_sizes[i], voi_th=voi_th,voi_r=voi_r,Bayesian=F)
+
+      if(length(tmp_result) > 2*length(settings$custom_th)){
+        print(tmp_result)
+        write_rds(tmp_result,here("simulation_result","raw0",paste0("sim_",sample_sizes[i],"_",n_sim,".rds")))
+        valid_result <- FALSE
+      }
+    }
+    }
+
+    if(type %in% c("both","Bayesian")){
+
+    valid_result <- TRUE
+
+    while(valid_result)
+    {
+      if(is.infinite(sample_sizes[i])) sample_sizes[i] <- dim(gusto)[1]
+
+      res2 <- work_horse(sample_sizes[i],Bayesian_bootstrap=T)
+
+      index <- which(res2[,'lambda'] %in% settings$custom_th)
+      voi_th_Bayesian <- res2[index,'voi']
+      voi_r_Bayesian <- process_results(res2,graphs="",th=settings$custom_th)$voi_r
+      tmp_result <- c(sample_sizes[i], voi_th=voi_th_Bayesian,voi_r=voi_r_Bayesian,Bayesian=T)
+
+      if(length(tmp_result) > 2*length(settings$custom_th)){
+        print(tmp_result)
+        write_rds(tmp_result,here("simulation_result","raw1",paste0("sim_",sample_sizes[i],"_",n_sim,".rds")))
+        valid_result <- FALSE
+      }
+    }
+    }
+  }
+
+  return("")
+}
+
+# for each sample, for each iteration, save the result and combine later
+# 500
 
 calc_auc <- function(reg_obj, x, y, n_sim=1000)
 {
