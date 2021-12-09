@@ -5,7 +5,7 @@ output: html_document
 
 ```{r setup, include=FALSE, echo=FALSE}
 library(here)
-load_file=here("simulation_result","2021.10.07.RDS")
+load_file=here("simulation_result","../2021.12.08.RDS")
 
 library(knitr)
 knitr::opts_chunk$set(echo = TRUE)
