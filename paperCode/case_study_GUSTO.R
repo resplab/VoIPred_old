@@ -8,10 +8,10 @@ settings <- list()
 settings$master_formula <- day30 ~ age + miloc + pmi + kill + pmin(sysbp,100) + lsp(pulse,50) + htn + dia
 settings$default_th <- 0.02
 settings$custom_th <- c(0.01,0.02,0.05,0.1)
-settings$n_sim <- 0 # if 0 wont do this part
+settings$n_sim <- 1000 # if 0 wont do this part
 settings$subsample <- 1000
 settings$auc_n_sim <- 0   #If set to 0, it will not calculate AUC with optimism correction with the same n_sim.
-settings$sample_size_n_sim_outer <- 1 #if set to 0 will not do
+settings$sample_size_n_sim_outer <- 0 #if set to 0 will not do
 settings$sample_size_n_sim_inner <- 1000 #Voi calculations for each point within each iteration
 settings$sample_sizes <- c(500, 1000, 2000, 4000, 8000, 16000, 32000, Inf)
 
@@ -326,4 +326,42 @@ calc_auc <- function(reg_obj, x, y, n_sim=1000)
   }
 
   return(c(auc=auc,optimism=optimism/n_sim))
+}
+
+
+
+generate_weird_model <- function(sample_size, event_p=NULL, shrinkage=1, bias_OR=1, n_sim=10)
+{
+  if(is.null(event_p))
+  {
+    sample <- gusto[sample((1:dim(gusto)[1]),sample_size),]
+  }
+  else
+  {
+    ones <- which(gusto$day30==1)
+    zeros <- which(gusto$day30==0)
+    sample <- gusto[c(sample(ones,sample_size*event_p),sample(zeros,sample_size*event_p)),]
+  }
+
+  master_formula <- settings$master_formula
+
+  x <- model.matrix(master_formula,sample)
+  y <- sample$day30
+
+  lambda <- cv_reg$lambda.min*shrinkage
+
+  message("lambda.min is", cv_reg$lambda.min)
+
+  reg <- glmnet(x, y, family = "binomial", lambda = lambda)
+
+  reg$a0 <- reg$a0 + log(bias_OR)
+
+  message("AUC calculations...")
+  auc <- calc_auc(reg, x, y, n_sim = settings$auc_n_sim)
+
+  message("AUC is", auc)
+
+  res <- voi.glmnet(reg,x,y,lambdas=settings$custom_th, n_sim = n_sim)
+
+  res
 }
