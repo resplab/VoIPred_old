@@ -66,10 +66,11 @@ voi.glm<-function(reg_obj, n_sim=1000, bootstrap=0, lambdas=(1:99)/100)
 
 
 #' @export
-#' @param reg_obj: any object that you can apply predict with new data to get predictions
+#' @param reg_obj: any object that you can apply predict with new data to get predictions. The structure should represent the correct model
 #' @param x: The model matrix of predictors
 #' @param y: The vector of responses
-voi.glmnet <- function(reg_obj, x, y, n_sim=1000, lambdas=(1:99)/100, Bayesian_bootstrap=F, empirical=F)
+#' @param pi: optional. Predictions from the current model. If not supplied, the predictions from reg_object will be used
+voi.glmnet <- function(reg_obj, x, y, pi=NULL, n_sim=1000, lambdas=(1:99)/100, Bayesian_bootstrap=F, empirical=F)
 {
   aux$coeffs <- t(as.matrix(coefficients(reg_obj)))
   aux$x <- x
@@ -78,7 +79,8 @@ voi.glmnet <- function(reg_obj, x, y, n_sim=1000, lambdas=(1:99)/100, Bayesian_b
 
   sample_size <- dim(x)[1]
 
-  pi<-predict(reg_obj, type="response", newx=x)
+  if(is.null(pi)) pi <- predict(reg_obj, type="response", newx=x)
+
   aux$pi <- pi
 
   NB_model <- rep(0, length(lambdas))
@@ -182,6 +184,117 @@ voi.glmnet <- function(reg_obj, x, y, n_sim=1000, lambdas=(1:99)/100, Bayesian_b
 
 
 
+#' @export
+voi.glmnet2 <- function(formula, data, pi, n_sim=1000, lambdas=(1:99)/100, Bayesian_bootstrap=F, empirical=F)
+{
+  x <- model.matrix(formula,data)
+  y <- data[,all.vars(formula)[1]]
+
+  aux$coeffs <- colnames(x)
+  aux$x <- x
+  aux$y <- y
+  aux$reg_obj <- NULL
+
+  sample_size <- dim(x)[1]
+
+  aux$pi <- pi
+
+  NB_model <- rep(0, length(lambdas))
+  NB_all <- NB_model
+  NB_max <- NB_model
+
+  NB_model_s2 <- rep(0, length(lambdas))
+  NB_all_s2 <- NB_model_s2
+  NB_max_s2 <- NB_model_s2
+  NB_model_all_s2 <- NB_model_s2
+  NB_model_max_s2 <- NB_model_s2
+  NB_all_max_s2 <- NB_model_s2
+
+  p_win_model <- p_win_all <- p_win_none <- rep(0, length(lambdas))
+
+  dc_model <- NB_model
+  dc_all <- NB_model
+
+  optimism <- NB_model
+
+  aux$bs_coeffs <- matrix(NA,nrow=n_sim, ncol=dim(x)[2])
+
+  colnames(aux$bs_coeffs) <- colnames(x)
+
+  for(j in 1:length(lambdas))
+  {
+    dc_model[j] <- dc_model[j] + mean((y - (1 - y) * lambdas[j] / (1 - lambdas[j])) * (pi > lambdas[j]))
+    dc_all[j] <- dc_all[j] + mean((y - (1 - y) * lambdas[j] / (1 - lambdas[j])) * 1)
+  }
+
+  pb <- progress::progress_bar$new(total=n_sim)
+
+  for(i in 1:n_sim)
+  {
+    pb$tick()
+    repeat
+    {
+      weights <- bootstrap(sample_size, Bayesian = Bayesian_bootstrap)
+      issues <- F
+      tryCatch(
+        {
+          tmp <- cv.glmnet(x=x, y=y, family="binomial",weights = as.vector(weights))
+          bs_reg <- glmnet(x=x, y=y, family="binomial", lambda=tmp$lambda.min, weights=as.vector(weights))
+        },warning=function(cond) {message("Warning occured! repeating with a new sample"); issues<- T; })
+      if(!issues) break
+    }
+
+    aux$bs_coeffs[i,] <- t(as.matrix(coefficients(bs_reg)))[-2]
+
+    p <- as.vector(predict(bs_reg, newx=x, type="response"))
+
+    if(i==1) plot(pi,p)
+
+    for(j in 1:length(lambdas))
+    {
+      tmp1 <- mean((p - (1 - p) * lambdas[j] / (1 - lambdas[j])) * (pi > lambdas[j]))
+      NB_model[j] <- NB_model[j] + tmp1
+      NB_model_s2[j] <- NB_model_s2[j] + tmp1^2
+      tmp2 <- mean((p - (1 - p) * lambdas[j] / (1 - lambdas[j])) * 1)
+      NB_all[j] <- NB_all[j] + tmp2
+      NB_all_s2[j] <- NB_all_s2[j] + tmp2^2
+      tmp3 <- mean((p - (1 - p) * lambdas[j] / (1 - lambdas[j])) * (p > lambdas[j]))
+      NB_max[j] <- NB_max[j] + tmp3
+      NB_max_s2[j] <- NB_max_s2[j] + tmp3^2
+      NB_model_all_s2[j] <- NB_model_all_s2[j] + (tmp1-tmp2)^2
+      NB_model_max_s2[j] <- NB_model_max_s2[j] + (tmp1-tmp3)^2
+      NB_all_max_s2[j] <- NB_all_max_s2[j] + (tmp2-tmp3)^2
+
+      winner <- which.max(c(tmp1,tmp2,0))
+      if(winner==1) p_win_model[j] <- p_win_model[j]+1 else if(winner==2) p_win_all[j] <- p_win_all[j]+1 else p_win_none[j]<-p_win_none[j]+1
+
+      dc_model_int <- sum((y + (1 - y) * lambdas[j] / (1 - lambdas[j])) * (p > lambdas[j]) * weights) / sum(weights)
+      dc_model_ext <- mean((y + (1 - y) * lambdas[j] / (1 - lambdas[j])) * (p > lambdas[j]))
+      optimism[j] <- optimism[j] + dc_model_int - dc_model_ext
+    }
+  }
+
+  NB_model <- NB_model / n_sim
+  NB_all <- NB_all / n_sim
+  NB_max <- NB_max / n_sim
+  NB_model_s2 <- NB_model_s2 / n_sim
+  NB_all_s2 <- NB_all_s2 / n_sim
+  NB_max_s2 <- NB_max_s2 / n_sim
+  NB_model_all_s2 <- NB_model_all_s2 / n_sim
+  NB_model_max_s2 <- NB_model_max_s2 / n_sim
+  NB_all_max_s2 <- NB_all_max_s2 / n_sim
+  p_win_model <- p_win_model/n_sim
+  p_win_all <- p_win_all/n_sim
+  p_win_none <- p_win_none/n_sim
+
+  optimism <- optimism / n_sim
+
+  voi <- (NB_max-pmax(0,NB_model,NB_all))
+
+  res <-cbind(lambda=lambdas, voi=voi, NB_all=NB_all, NB_model=NB_model, NB_max=NB_max, p_win_model=p_win_model, p_win_all=p_win_all, p_win_none=p_win_none, dc_model=dc_model, dc_all=dc_all, optimism=optimism, NB_all_s2=NB_all_s2, NB_model_s2=NB_model_s2, NB_max_s2=NB_max_s2, NB_model_all_s2=NB_model_all_s2, NB_model_max_s2=NB_model_max_s2, NB_all_max_s2=NB_all_max_s2)
+
+  return(res)
+}
 
 
 

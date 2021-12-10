@@ -1,6 +1,7 @@
 library(glmnet)
 library(VoIPred)
 library(rms)
+library(pROC)
 
 machine_id <- round(runif(1)*10^10)
 
@@ -8,9 +9,9 @@ settings <- list()
 settings$master_formula <- day30 ~ age + miloc + pmi + kill + pmin(sysbp,100) + lsp(pulse,50) + htn + dia
 settings$default_th <- 0.02
 settings$custom_th <- c(0.01,0.02,0.05,0.1)
-settings$n_sim <- 1000 # if 0 wont do this part
+settings$n_sim <- 10 # if 0 wont do this part
 settings$subsample <- 1000
-settings$auc_n_sim <- 0   #If set to 0, it will not calculate AUC with optimism correction with the same n_sim.
+settings$auc_n_sim <- 1   #If set to 0, it will not calculate AUC with optimism correction with the same n_sim.
 settings$sample_size_n_sim_outer <- 0 #if set to 0 will not do
 settings$sample_size_n_sim_inner <- 1000 #Voi calculations for each point within each iteration
 settings$sample_sizes <- c(500, 1000, 2000, 4000, 8000, 16000, 32000, Inf)
@@ -42,6 +43,8 @@ case_study_gusto <- function(load_file=NULL, save_file=NULL, seed=1234)
     cv_reg <- cv.glmnet(x, y, family="binomial")
     reg <- glmnet(x, y, family = "binomial", lambda = cv_reg$lambda.min)
 
+    pi <- predict(reg,newx=x, type="response")
+
     results$reg_obj <<- reg
 
     if(settings$auc_n_sim)
@@ -53,12 +56,12 @@ case_study_gusto <- function(load_file=NULL, save_file=NULL, seed=1234)
     if(settings$n_sim>0)
     {
       message("VoI calculations...")
-      results$res0 <<- voi.glmnet(reg, x, y, n_sim = settings$n_sim, Bayesian_bootstrap = F)
+      results$res0 <<- voi.glmnet2(master_formula, sample, pi, n_sim = settings$n_sim, Bayesian_bootstrap = F)
 
       results$coeffs <<- VoIPred:::aux$coeffs
       results$bs_coeffs <<- VoIPred:::aux$bs_coeffs
 
-      results$res1 <<- voi.glmnet(reg, x, y, n_sim = settings$n_sim, Bayesian_bootstrap = T)
+      results$res1 <<- voi.glmnet2(master_formula, sample, pi, n_sim = settings$n_sim, Bayesian_bootstrap = T)
     }
 
     if(settings$sample_size_n_sim_outer>0)
@@ -87,8 +90,8 @@ case_study_gusto <- function(load_file=NULL, save_file=NULL, seed=1234)
 
 
     results$table_1 <<- data.frame(
-      covariate=colnames(results$coeffs),
-      point_estimate=format(t(unname(results$coeffs)),2,2),
+      covariate=names(coefficients(reg)[-2,]),
+      point_estimate=format(t(unname(coefficients(reg)[-2])),2,2),
       p_inc=format(unname(1-colMeans(results$bs_coeffs==0)),2,2),
       ci=paste(
         format(round(apply(X=results$bs_coeffs,2,FUN = quantile,0.025),3),nsmall=3),
@@ -151,7 +154,7 @@ voi_by_sample_size <- function(n_sim, sample_sizes)
         }
         else
         {
-          voi.glmnet(reg, model_matrix, sample$day30, n_sim = settings$sample_size_n_sim_inner, Bayesian_bootstrap = F)
+          voi.glmnet2(master_formula, sample, n_sim = settings$sample_size_n_sim_inner, Bayesian_bootstrap = F)
         }
       }, error=function(w)
       {
@@ -330,8 +333,9 @@ calc_auc <- function(reg_obj, x, y, n_sim=1000)
 
 
 
-generate_weird_model <- function(sample_size, event_p=NULL, shrinkage=1, bias_OR=1, n_sim=10)
+generate_weird_model <- function(sample_size, event_p=NULL, n_covar_remove=0, bias_OR=1, n_sim=10)
 {
+  set.seed(1234)
   if(is.null(event_p))
   {
     sample <- gusto[sample((1:dim(gusto)[1]),sample_size),]
@@ -343,25 +347,46 @@ generate_weird_model <- function(sample_size, event_p=NULL, shrinkage=1, bias_OR
     sample <- gusto[c(sample(ones,sample_size*event_p),sample(zeros,sample_size*event_p)),]
   }
 
+  sample$kill <- (as.numeric(sample$Killip)>1)*1
   master_formula <- settings$master_formula
 
   x <- model.matrix(master_formula,sample)
+
+  # if(!is.null(covars_remove))
+  # {
+  #   x_reg <- x[,-which(colnames(x) %in% covars_remove)]
+  # }
+  # else
+  # {
+  #   x_reg <- x
+  # }
+  #
   y <- sample$day30
 
-  lambda <- cv_reg$lambda.min*shrinkage
+  cv_reg <- cv.glmnet(x, y, family="binomial")
+  reg <- glmnet(x, y, family = "binomial", lambda = cv_reg$lambda.min)
 
-  message("lambda.min is", cv_reg$lambda.min)
-
-  reg <- glmnet(x, y, family = "binomial", lambda = lambda)
-
-  reg$a0 <- reg$a0 + log(bias_OR)
-
-  message("AUC calculations...")
-  auc <- calc_auc(reg, x, y, n_sim = settings$auc_n_sim)
-
+  auc <- roc(y,as.vector(predict(reg,newx=x)))$auc
   message("AUC is", auc)
 
-  res <- voi.glmnet(reg,x,y,lambdas=settings$custom_th, n_sim = n_sim)
+  if(n_covar_remove>0)
+  {
+   reg$beta[which(reg$beta!=0)[1:n_covar_remove]] <- 0
+   log_lins <- predict(reg,newx=x)
+   #readjust the intercept
+   tmp <- glm(y~log_lins, family = binomial(link="logit"))
+   pi <- predict(tmp, type="response")
+  }
+  else
+  {
+    reg$a0 <- reg$a0 + log(bias_OR)
+    pi <- as.vector(predict(reg,newx=x,type="response"))
+  }
 
-  res
+  auc <- roc(y,pi)$auc
+  message("AUC is", auc)
+
+  res <- voi.glmnet2(master_formula, sample, pi, lambdas=settings$custom_th, n_sim = n_sim)
+
+  res[,'voi']
 }
