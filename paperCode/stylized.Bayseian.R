@@ -1,4 +1,6 @@
 library(R2OpenBUGS)
+library(MASS)
+data_set <- birthwt
 
 bugs_model <- function()
 {
