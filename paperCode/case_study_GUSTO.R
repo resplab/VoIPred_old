@@ -263,7 +263,7 @@ voi_by_sample_size_custom <- function(n_sim, sample_sizes,type)
 
       if(length(tmp_result) > 2*length(settings$custom_th)){
         print(tmp_result)
-        write_rds(tmp_result,here("simulation_result","raw0",paste0("sim_",sample_sizes[i],"_",n_sim,".rds")))
+        write_rds(tmp_result,here("simulation_result","raw00",paste0("sim_",sample_sizes[i],"_",n_sim,".rds")))
         valid_result <- FALSE
       }
     }
@@ -286,7 +286,7 @@ voi_by_sample_size_custom <- function(n_sim, sample_sizes,type)
 
       if(length(tmp_result) > 2*length(settings$custom_th)){
         print(tmp_result)
-        write_rds(tmp_result,here("simulation_result","raw1",paste0("sim_",sample_sizes[i],"_",n_sim,".rds")))
+        write_rds(tmp_result,here("simulation_result","raw11",paste0("sim_",sample_sizes[i],"_",n_sim,".rds")))
         valid_result <- FALSE
       }
     }

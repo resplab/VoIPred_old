@@ -3,7 +3,7 @@ data_set <- birthwt
 
 n <- dim(birthwt)[1]
 z <- 0.2 #This is the risk threshold
-n_sim <- 1000
+n_sim <- 10000
 
 set.seed(1)
 
@@ -29,4 +29,7 @@ ENB_all<-mean(NB_all);ENB_model<-mean(NB_model);ENB_max<-mean(NB_max)
 #4
 EVPI<-ENB_max-max(0,ENB_model,ENB_all)
 EVPI_r<-(ENB_max-max(0,ENB_all))/(ENB_model-max(0,ENB_all))
+
+readr::write_rds(c(ENB_all,ENB_model,ENB_max,EVPI,EVPI_r),here("paperCode","supp_results","bootstrap.rds"))
+
 
