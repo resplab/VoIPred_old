@@ -185,7 +185,7 @@ voi.glmnet <- function(reg_obj, x, y, pi=NULL, n_sim=1000, lambdas=(1:99)/100, B
 
 
 #' @export
-voi.glmnet2 <- function(formula, data, pi, n_sim=1000, lambdas=(1:99)/100, Bayesian_bootstrap=F, empirical=F)
+voi.glmnet2 <- function(formula, data, pi, n_sim=1000, lambdas=(1:99)/100, Bayesian_bootstrap=F, empirical=F, weights=NULL)
 {
   x <- model.matrix(formula,data)
   y <- data[,all.vars(formula)[1]]
@@ -234,12 +234,12 @@ voi.glmnet2 <- function(formula, data, pi, n_sim=1000, lambdas=(1:99)/100, Bayes
     pb$tick()
     repeat
     {
-      weights <- bootstrap(sample_size, Bayesian = Bayesian_bootstrap)
+      weights2 <- bootstrap(sample_size, Bayesian = Bayesian_bootstrap, weights=weights)
       issues <- F
       tryCatch(
         {
-          tmp <- cv.glmnet(x=x, y=y, family="binomial",weights = as.vector(weights))
-          bs_reg <- glmnet(x=x, y=y, family="binomial", lambda=tmp$lambda.min, weights=as.vector(weights))
+          tmp <- cv.glmnet(x=x, y=y, family="binomial",weights = as.vector(weights2))
+          bs_reg <- glmnet(x=x, y=y, family="binomial", lambda=tmp$lambda.min, weights=as.vector(weights2))
         },warning=function(cond) {message("Warning occured! repeating with a new sample"); issues<- T; })
       if(!issues) break
     }
@@ -290,8 +290,9 @@ voi.glmnet2 <- function(formula, data, pi, n_sim=1000, lambdas=(1:99)/100, Bayes
   optimism <- optimism / n_sim
 
   voi <- (NB_max-pmax(0,NB_model,NB_all))
+  voi_r <- (NB_max-pmax(0,NB_all))/(NB_model-pmax(0,NB_all))
 
-  res <-cbind(lambda=lambdas, voi=voi, NB_all=NB_all, NB_model=NB_model, NB_max=NB_max, p_win_model=p_win_model, p_win_all=p_win_all, p_win_none=p_win_none, dc_model=dc_model, dc_all=dc_all, optimism=optimism, NB_all_s2=NB_all_s2, NB_model_s2=NB_model_s2, NB_max_s2=NB_max_s2, NB_model_all_s2=NB_model_all_s2, NB_model_max_s2=NB_model_max_s2, NB_all_max_s2=NB_all_max_s2)
+  res <-cbind(lambda=lambdas, voi=voi, voi_r=voi_r, NB_all=NB_all, NB_model=NB_model, NB_max=NB_max, p_win_model=p_win_model, p_win_all=p_win_all, p_win_none=p_win_none, dc_model=dc_model, dc_all=dc_all, optimism=optimism, NB_all_s2=NB_all_s2, NB_model_s2=NB_model_s2, NB_max_s2=NB_max_s2, NB_model_all_s2=NB_model_all_s2, NB_model_max_s2=NB_model_max_s2, NB_all_max_s2=NB_all_max_s2)
 
   return(res)
 }
@@ -302,16 +303,18 @@ voi.glmnet2 <- function(formula, data, pi, n_sim=1000, lambdas=(1:99)/100, Bayes
 
 
 
-bootstrap <- function (n, Bayesian=F)
+bootstrap <- function (n, Bayesian=F, weights=NULL)
 {
   if(Bayesian)
   {
+    if(!is.null(weights)) stop("BAyesian bootstrap currently does not work with weighted samples.")
     u <- c(0,sort(runif(n-1)),1)
     return((u[-1] - u[-length(u)])*n)
   }
   else
   {
-    u <- rmultinom(1,n,rep(1/n,n))
+    if(is.null(weights)) weights <-rep(1/n,n)
+    u <- rmultinom(1,n,weights)
     return(u)
   }
 }

@@ -333,51 +333,86 @@ calc_auc <- function(reg_obj, x, y, n_sim=1000)
 
 
 
-generate_weird_model <- function(sample_size, event_p=NULL, n_covar_remove=0, bias_OR=1, n_sim=10)
+generate_weird_model <- function(sample_size, event_p=NA, shrinkage_type="", shrinkage_factor=NA, bias_OR=NA, n_sim=200, seed=1234)
 {
-  set.seed(1234)
-  if(is.null(event_p))
+  set.seed(seed)
+
+  sample <- gusto[sample((1:dim(gusto)[1]),sample_size),]
+
+  if(!is.na(event_p))
   {
-    sample <- gusto[sample((1:dim(gusto)[1]),sample_size),]
+    cases <- which(sample$day30==1)
+    controls <- which(sample$day30==0)
+    p <- length(cases) / sample_size
+    q <- event_p
+    weights <- rep(NA, sample_size)
+    weights[cases] <- q*(1-p)/p/(1-q)
+    weights[controls] <- 1
+    weights <- weights / sum(weights) * sample_size
   }
   else
   {
-    ones <- which(gusto$day30==1)
-    zeros <- which(gusto$day30==0)
-    sample <- gusto[c(sample(ones,sample_size*event_p),sample(zeros,sample_size*event_p)),]
+    weights <- rep(1,sample_size)
   }
 
   sample$kill <- (as.numeric(sample$Killip)>1)*1
+
   master_formula <- settings$master_formula
 
   x <- model.matrix(master_formula,sample)
-
-  # if(!is.null(covars_remove))
-  # {
-  #   x_reg <- x[,-which(colnames(x) %in% covars_remove)]
-  # }
-  # else
-  # {
-  #   x_reg <- x
-  # }
-  #
   y <- sample$day30
 
-  cv_reg <- cv.glmnet(x, y, family="binomial")
-  reg <- glmnet(x, y, family = "binomial", lambda = cv_reg$lambda.min)
+  if(shrinkage_type=="auc")
+  {
+    cv_reg <- cv.glmnet(x, y, family="binomial", weights = weights, type.measure = "auc")
+    best <- which.min(abs(cv_reg$cvm-shrinkage_factor))
+    lambda <- cv_reg$lambda[best]
+  }
+  else if(shrinkage_type=="lambda")
+  {
+    lambda <- shrinkage_factor
+  }
+  else
+  {
+    cv_reg <- cv.glmnet(x, y, family="binomial", weights = weights)
+    lambda <- cv_reg$lambda.min
+  }
+
+  reg <- glmnet(x, y, family = "binomial", lambda = lambda, weights = weights)
+
+  pi <- as.vector(predict(reg, newx=x, type="response"))
+
+#bias and intercept of the proposed model
+  log_lins0 <- log(pi/(1-pi))
+  tmp <- glm(y~log_lins0, family = binomial(link="logit"), weights = weights)
+  b0 <- coefficients(tmp)[1]
+  b1 <- coefficients(tmp)[2]
 
   auc <- roc(y,as.vector(predict(reg,newx=x)))$auc
   message("AUC is", auc)
 
-  if(n_covar_remove>0)
+  if(shrinkage_type=="covar_remove")
   {
-   reg$beta[which(reg$beta!=0)[1:n_covar_remove]] <- 0
-   log_lins <- predict(reg,newx=x)
-   #readjust the intercept
-   tmp <- glm(y~log_lins, family = binomial(link="logit"))
-   pi <- predict(tmp, type="response")
+     n_covar_remove <- shrinkage_factor
+     reg$beta[which(reg$beta!=0)[1:n_covar_remove]] <- 0
+    #Make sure the model has the same bias and intercept
+     log_lins <- predict(reg,newx=x)
+     tmp <- glm(y~log_lins, family = binomial(link="logit"), weights = weights)
+     B0 <- coefficients(tmp)[1]
+     B1 <- coefficients(tmp)[2]
+     log_lins1 <- -b0/b1 + (B0 + B1*log_lins)/b1
+     pi <- as.vector(1/(1+exp(-log_lins1)))
   }
-  else
+  if(shrinkage_type=="global") #Monotonical so does not change the AUC!
+  {
+    reg$beta <- reg$beta*shrinkage_factor
+    #Make sure the model has the same intercept
+    log_lins <- predict(reg,newx=x)
+    tmp <- glm(y~offset(log_lins), family = binomial(link="logit"), weights = weights)
+    pi <- predict(tmp)
+  }
+
+  if(!is.na(bias_OR))
   {
     reg$a0 <- reg$a0 + log(bias_OR)
     pi <- as.vector(predict(reg,newx=x,type="response"))
@@ -386,7 +421,39 @@ generate_weird_model <- function(sample_size, event_p=NULL, n_covar_remove=0, bi
   auc <- roc(y,pi)$auc
   message("AUC is", auc)
 
-  res <- voi.glmnet2(master_formula, sample, pi, lambdas=settings$custom_th, n_sim = n_sim)
+  res <- voi.glmnet2(master_formula, sample, pi, lambdas=settings$custom_th, n_sim = n_sim, weights = weights)
 
-  res[,'voi']
+  c(res[,'voi'], auc=auc)
 }
+
+
+weird_model_caller <- function(seed=1234)
+{
+  out <- data.frame("sample_size"=integer(),"event_p"=double(), "n_covar_remove"=double(),"bias_OR"=double(),"voi_1"=double(), "voi_2"=double(),"voi_3"=double(),"voi_4"=double(),  "auc"=double())
+  sample_sizes <- c(500,1000,2500,5000)
+  event_ps <- c(NA,0.15,0.3,0.5)
+  n_covar_removes <- c(1,2,3,4,5)
+  bias_ORs <- c(0.5,0.75,1,4/3,2)
+  for(sample_size in sample_sizes)
+  {
+    for(event_p in event_ps)
+    {
+      res <- generate_weird_model(sample_size, event_p = event_p, seed=seed)
+      out <- rbind(out,c(sample_size, event_p, NA, NA, res))
+    }
+    for(n_covar_remove in n_covar_removes)
+    {
+      res <- generate_weird_model(sample_size, shrinkage_type="covar_remove", shrinkage_factor = n_covar_remove, seed=seed)
+      out <- rbind(out,c(sample_size, NA, n_covar_remove, NA, res))
+    }
+    for(bias_OR in bias_ORs)
+    {
+      res <- generate_weird_model(sample_size, bias_OR = bias_OR, seed=seed)
+      out <- rbind(out,c(sample_size, NA, NA, bias_OR, res))
+    }
+  }
+  colnames(out) <- c("sample_size","event_p", "n_covar_remove","bias_OR","voi_1","voi_2","voi_3","voi_4", "auc")
+
+  out
+}
+
