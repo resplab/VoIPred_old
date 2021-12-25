@@ -333,7 +333,7 @@ calc_auc <- function(reg_obj, x, y, n_sim=1000)
 
 
 
-generate_weird_model <- function(sample_size, event_p=NA, shrinkage_type="", shrinkage_factor=NA, bias_OR=NA, n_sim=200, seed=1234)
+perturbed_scenario <- function(sample_size, event_p=NA, shrinkage_type="", shrinkage_factor=NA, bias_OR=NA, n_sim=200, seed=1234)
 {
   set.seed(seed)
 
@@ -411,6 +411,16 @@ generate_weird_model <- function(sample_size, event_p=NA, shrinkage_type="", shr
     tmp <- glm(y~offset(log_lins), family = binomial(link="logit"), weights = weights)
     pi <- predict(tmp)
   }
+  if(shrinkage_type=="noise") #Monotonical so does not change the AUC!
+  {
+    log_lins <- log(pi/(1-pi)) + rnorm(length(pi),0,shrinkage_factor)
+    #Make sure the model has the same intercept
+    tmp <- glm(y~log_lins, family = binomial(link="logit"))
+    B0 <- coefficients(tmp)[1]
+    B1 <- coefficients(tmp)[2]
+    log_lins1 <- -b0/b1 + (B0 + B1*log_lins)/b1
+    pi <- as.vector(1/(1+exp(-log_lins1)))
+  }
 
   if(!is.na(bias_OR))
   {
@@ -427,28 +437,28 @@ generate_weird_model <- function(sample_size, event_p=NA, shrinkage_type="", shr
 }
 
 
-weird_model_caller <- function(seed=1234)
+generte_perturbed_scenario <- function(seed=1234)
 {
   out <- data.frame("sample_size"=integer(),"event_p"=double(), "n_covar_remove"=double(),"bias_OR"=double(),"voi_1"=double(), "voi_2"=double(),"voi_3"=double(),"voi_4"=double(),  "auc"=double())
   sample_sizes <- c(500,1000,2500,5000)
   event_ps <- c(NA,0.15,0.3,0.5)
   n_covar_removes <- c(1,2,3,4,5)
-  bias_ORs <- c(0.5,0.75,1,4/3,2)
+  bias_ORs <- c(1/2,3/4,4/3,2)
   for(sample_size in sample_sizes)
   {
     for(event_p in event_ps)
     {
-      res <- generate_weird_model(sample_size, event_p = event_p, seed=seed)
+      res <- perturbed_scenario(sample_size, event_p = event_p, seed=seed)
       out <- rbind(out,c(sample_size, event_p, NA, NA, res))
     }
     for(n_covar_remove in n_covar_removes)
     {
-      res <- generate_weird_model(sample_size, shrinkage_type="covar_remove", shrinkage_factor = n_covar_remove, seed=seed)
+      res <- perturbed_scenario(sample_size, shrinkage_type="covar_remove", shrinkage_factor = n_covar_remove, seed=seed)
       out <- rbind(out,c(sample_size, NA, n_covar_remove, NA, res))
     }
     for(bias_OR in bias_ORs)
     {
-      res <- generate_weird_model(sample_size, bias_OR = bias_OR, seed=seed)
+      res <- perturbed_scenario(sample_size, bias_OR = bias_OR, seed=seed)
       out <- rbind(out,c(sample_size, NA, NA, bias_OR, res))
     }
   }
