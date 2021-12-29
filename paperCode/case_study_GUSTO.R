@@ -391,27 +391,7 @@ perturbed_scenario <- function(sample_size, event_p=NA, shrinkage_type="", shrin
   auc <- roc(y,as.vector(predict(reg,newx=x)))$auc
   message("AUC is", auc)
 
-  if(shrinkage_type=="covar_remove")
-  {
-     n_covar_remove <- shrinkage_factor
-     reg$beta[which(reg$beta!=0)[1:n_covar_remove]] <- 0
-    #Make sure the model has the same bias and intercept
-     log_lins <- predict(reg,newx=x)
-     tmp <- glm(y~log_lins, family = binomial(link="logit"), weights = weights)
-     B0 <- coefficients(tmp)[1]
-     B1 <- coefficients(tmp)[2]
-     log_lins1 <- -b0/b1 + (B0 + B1*log_lins)/b1
-     pi <- as.vector(1/(1+exp(-log_lins1)))
-  }
-  if(shrinkage_type=="global") #Monotonical so does not change the AUC!
-  {
-    reg$beta <- reg$beta*shrinkage_factor
-    #Make sure the model has the same intercept
-    log_lins <- predict(reg,newx=x)
-    tmp <- glm(y~offset(log_lins), family = binomial(link="logit"), weights = weights)
-    pi <- predict(tmp)
-  }
-  if(shrinkage_type=="noise") #Monotonical so does not change the AUC!
+  if(shrinkage_type=="noise")
   {
     log_lins <- log(pi/(1-pi)) + rnorm(length(pi),0,shrinkage_factor)
     #Make sure the model has the same intercept
@@ -439,10 +419,10 @@ perturbed_scenario <- function(sample_size, event_p=NA, shrinkage_type="", shrin
 
 generte_perturbed_scenario <- function(seed=1234)
 {
-  out <- data.frame("sample_size"=integer(),"event_p"=double(), "n_covar_remove"=double(),"bias_OR"=double(),"voi_1"=double(), "voi_2"=double(),"voi_3"=double(),"voi_4"=double(),  "auc"=double())
+  out <- data.frame("sample_size"=integer(),"event_p"=double(), "noise_sd"=double(),"bias_OR"=double(),"voi_1"=double(), "voi_2"=double(),"voi_3"=double(),"voi_4"=double(),  "auc"=double())
   sample_sizes <- c(500,1000,2500,5000)
   event_ps <- c(NA,0.15,0.3,0.5)
-  n_covar_removes <- c(1,2,3,4,5)
+  noise_sds <- c(1/3,2/3,1,3/2)
   bias_ORs <- c(1/2,3/4,4/3,2)
   for(sample_size in sample_sizes)
   {
@@ -451,10 +431,10 @@ generte_perturbed_scenario <- function(seed=1234)
       res <- perturbed_scenario(sample_size, event_p = event_p, seed=seed)
       out <- rbind(out,c(sample_size, event_p, NA, NA, res))
     }
-    for(n_covar_remove in n_covar_removes)
+    for(noise_sd in noise_sds)
     {
-      res <- perturbed_scenario(sample_size, shrinkage_type="covar_remove", shrinkage_factor = n_covar_remove, seed=seed)
-      out <- rbind(out,c(sample_size, NA, n_covar_remove, NA, res))
+      res <- perturbed_scenario(sample_size, shrinkage_type="noise", shrinkage_factor = noise_sd, seed=seed)
+      out <- rbind(out,c(sample_size, NA, noise_sd, NA, res))
     }
     for(bias_OR in bias_ORs)
     {
